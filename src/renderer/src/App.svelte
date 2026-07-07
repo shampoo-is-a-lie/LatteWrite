@@ -26,6 +26,8 @@
   let dictLabel = ''
   let dictationCtl = null
   let audioInputs = []
+  let dictAnchor = null   // doc position where the current phrase's interim begins
+  let dictLen = 0         // length of the currently-shown interim text
 
   let showStyles = false
   let showSettings = false
@@ -131,21 +133,72 @@
       .map(d => ({ deviceId: d.deviceId, label: d.label || 'Microphone' }))
   }
 
+  function clampPos(p) {
+    return Math.max(0, Math.min(p, editor.state.doc.content.size))
+  }
+  function greyColor() {
+    return getComputedStyle(document.documentElement).getPropertyValue('--muted').trim() || '#888888'
+  }
+  // Tiptap parses inserted strings as HTML; escape so speech text stays literal.
+  function esc(s) {
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  }
+
+  // Live hypothesis: replace the current interim range with new greyed text.
+  function dictInterim(text) {
+    if (!editor || !text) return
+    if (dictAnchor == null) dictAnchor = editor.state.selection.to
+    const from = clampPos(dictAnchor)
+    const to = clampPos(dictAnchor + dictLen)
+    const t = text.replace(/^\s+/, '')
+    editor.chain()
+      .insertContentAt({ from, to }, esc(t))
+      .setTextSelection({ from, to: from + t.length })
+      .setColor(greyColor())
+      .setTextSelection(from + t.length)
+      .run()
+    dictLen = t.length
+  }
+
+  // Commit: replace the interim range with final, un-greyed text + a trailing space.
+  function dictCommit(text) {
+    if (!editor || !text) return
+    if (dictAnchor == null) dictAnchor = editor.state.selection.to
+    const from = clampPos(dictAnchor)
+    const to = clampPos(dictAnchor + dictLen)
+    const out = text.replace(/\s+$/, '') + ' '
+    editor.chain()
+      .insertContentAt({ from, to }, esc(out))
+      .setTextSelection({ from, to: from + out.length })
+      .unsetColor()
+      .setTextSelection(from + out.length)
+      .run()
+    dictAnchor = from + out.length
+    dictLen = 0
+  }
+
   async function toggleDictate() {
     if (dictating) {
       dictationCtl?.stop()
+      // Keep any un-committed interim as normal (un-greyed) text.
+      if (editor && dictLen > 0 && dictAnchor != null) {
+        const from = clampPos(dictAnchor)
+        const to = clampPos(dictAnchor + dictLen)
+        editor.chain().setTextSelection({ from, to }).unsetColor().setTextSelection(to).run()
+      }
       dictating = false
       dictLabel = ''
+      dictAnchor = null
+      dictLen = 0
       return
     }
     if (!micAvailable) return
     try {
       dictating = true
+      dictAnchor = null
+      dictLen = 0
       dictationCtl = createDictation(settings.dictationEngine || 'whisper', { deviceId: settings.audioDeviceId, model: settings.whisperModel })
-      await dictationCtl.start(
-        (interim) => { dictLabel = interim },
-        (finalText) => { if (editor && finalText) editor.commands.insertContent(finalText.replace(/\s+$/, '') + ' ') }
-      )
+      await dictationCtl.start(dictInterim, dictCommit, (s) => { dictLabel = s })
     } catch (e) {
       dictating = false
       dictLabel = ''

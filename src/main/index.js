@@ -11,6 +11,11 @@ import { exportHTML, exportMarkdown, exportDocx } from './export.js'
 
 const FILTERS = [{ name: 'LatteWrite', extensions: ['latte'] }]
 
+// Enable WebGPU for local Whisper acceleration (Linux Chromium needs the nudge).
+// transformers.js falls back to CPU/WASM if this doesn't take.
+app.commandLine.appendSwitch('enable-unsafe-webgpu')
+app.commandLine.appendSwitch('enable-features', 'Vulkan')
+
 let mainWindow = null
 
 function createWindow() {

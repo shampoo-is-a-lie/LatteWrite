@@ -1,15 +1,26 @@
 // Speech-to-text. Two engines behind one interface:
-//   webspeech — Chromium's webkitSpeechRecognition. Online, zero-install, but in
-//               Electron it often fails ('network') because Electron ships without
-//               Chrome's Google Speech API key, and it always uses the OS default
-//               input (no device selection).
-//   whisper   — local, offline, runs Whisper via transformers.js in the renderer.
-//               Fully controls the input device, so the device selector applies.
-// The editor only ever sees onInterim / onFinal.
+//   whisper   — local/offline via transformers.js. Streaming: it re-transcribes
+//               the growing current phrase every ~0.5s (shown as live interim
+//               text) and commits it when voice-activity detection sees a pause.
+//               Prefers WebGPU, falls back to CPU/WASM.
+//   webspeech — Chromium's webkitSpeechRecognition. Streams natively but is
+//               unreliable in Electron (ships without Chrome's Google Speech key)
+//               and can't pick an input device.
+// Both drive the same callbacks:
+//   onInterim(text) — live, un-committed hypothesis (rendered greyed)
+//   onFinal(text)   — committed text
+//   onStatus(text)  — short status for the control pill
 
 const WHISPER_MODEL = 'onnx-community/whisper-base.en'
 
-export function createDictation(engine = 'webspeech', opts = {}) {
+const VOICE_RMS = 0.008    // above this = speech
+const SILENCE_MS = 900     // pause this long → commit the phrase
+const MIN_AUDIO_S = 0.4    // don't transcribe less than this
+const GROWTH_S = 0.25      // only re-transcribe once this much new audio arrived
+const MAX_PHRASE_S = 18    // force a commit on very long unbroken speech
+const TICK_MS = 500
+
+export function createDictation(engine = 'whisper', opts = {}) {
   if (engine === 'whisper') return new WhisperDictation(opts)
   return new WebSpeechDictation(opts)
 }
@@ -22,9 +33,10 @@ class WebSpeechDictation {
     this.active = false
   }
 
-  async start(onInterim, onFinal) {
+  async start(onInterim, onFinal, onStatus) {
     if (!this.supported) throw new Error('Web Speech is not available in this build')
     this.active = true
+    onStatus('LISTENING')
     const rec = new this.SR()
     rec.lang = 'en-US'
     rec.continuous = true
@@ -58,54 +70,92 @@ class WhisperDictation {
     this.busy = false
   }
 
-  async start(onInterim, onFinal) {
+  async start(onInterim, onFinal, onStatus) {
     this.active = true
-    onInterim('LOADING MODEL…')
     const { pipeline, env } = await import('@huggingface/transformers')
     env.allowLocalModels = false
-    this.transcriber = await pipeline('automatic-speech-recognition', this.model)
+    this.transcriber = await this.load(pipeline, onStatus)
     if (!this.active) return
-    onInterim('')
 
     this.stream = await navigator.mediaDevices.getUserMedia({
       audio: this.deviceId ? { deviceId: { exact: this.deviceId } } : true
     })
     const ctx = new AudioContext()
     this.ctx = ctx
+    this.rate = ctx.sampleRate
     const source = ctx.createMediaStreamSource(this.stream)
     const proc = ctx.createScriptProcessor(4096, 1, 1)
     this.proc = proc
 
-    this.chunks = []
-    this.samples = 0
-    const windowSamples = ctx.sampleRate * 5 // transcribe every ~5s
+    this.phrase = []
+    this.phraseSamples = 0
+    this.processedSamples = 0
+    this.lastVoice = performance.now()
 
     proc.onaudioprocess = (e) => {
       if (!this.active) return
-      this.chunks.push(new Float32Array(e.inputBuffer.getChannelData(0)))
-      this.samples += e.inputBuffer.length
-      if (this.samples >= windowSamples && !this.busy) this.flush(ctx.sampleRate, onFinal)
+      const data = e.inputBuffer.getChannelData(0)
+      let sum = 0
+      for (let i = 0; i < data.length; i++) sum += data[i] * data[i]
+      if (Math.sqrt(sum / data.length) > VOICE_RMS) this.lastVoice = performance.now()
+      this.phrase.push(new Float32Array(data))
+      this.phraseSamples += data.length
     }
     source.connect(proc)
     proc.connect(ctx.destination)
+
+    onStatus(`LISTENING · ${this.device}`)
+    this.loop = setInterval(() => this.tick(onInterim, onFinal), TICK_MS)
   }
 
-  async flush(rate, onFinal) {
+  async load(pipeline, onStatus) {
+    const attempts = [
+      { device: 'webgpu', dtype: 'fp16', label: 'GPU' },
+      { device: 'wasm', dtype: 'q8', label: 'CPU' }
+    ]
+    for (const a of attempts) {
+      try {
+        onStatus(`LOADING · ${a.label}…`)
+        const t = await pipeline('automatic-speech-recognition', this.model, { device: a.device, dtype: a.dtype })
+        this.device = a.label
+        return t
+      } catch { /* try next backend */ }
+    }
+    throw new Error('Could not initialise Whisper')
+  }
+
+  async tick(onInterim, onFinal) {
+    if (this.busy || !this.active) return
+    if (this.phraseSamples < this.rate * MIN_AUDIO_S) return
+
+    const now = performance.now()
+    const silent = (now - this.lastVoice) > SILENCE_MS
+    const tooLong = this.phraseSamples > this.rate * MAX_PHRASE_S
+    const grew = this.phraseSamples - this.processedSamples > this.rate * GROWTH_S
+    if (!grew && !silent && !tooLong) return
+
     this.busy = true
-    const merged = mergeFloat32(this.chunks)
-    this.chunks = []
-    this.samples = 0
+    this.processedSamples = this.phraseSamples
     try {
-      const audio = downsample(merged, rate, 16000)
+      const audio = downsample(mergeFloat32(this.phrase), this.rate, 16000)
       const out = await this.transcriber(audio)
       const text = (out.text || '').trim()
-      if (text && this.active) onFinal(text + ' ')
-    } catch { /* skip this window */ }
+      if (silent || tooLong) {
+        if (text) onFinal(text)
+        this.phrase = []
+        this.phraseSamples = 0
+        this.processedSamples = 0
+        this.lastVoice = performance.now()
+      } else if (text) {
+        onInterim(text)
+      }
+    } catch { /* skip this pass */ }
     this.busy = false
   }
 
   stop() {
     this.active = false
+    clearInterval(this.loop)
     try { if (this.proc) { this.proc.onaudioprocess = null; this.proc.disconnect() } } catch {}
     try { if (this.ctx) this.ctx.close() } catch {}
     try { if (this.stream) this.stream.getTracks().forEach(t => t.stop()) } catch {}
