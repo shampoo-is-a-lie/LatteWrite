@@ -1,6 +1,7 @@
 <script>
   export let settings = {}
   export let connected = false
+  export let inputs = []
   export let onPatch = () => {}
   export let onConnect = () => {}
   export let onDisconnect = () => {}
@@ -10,11 +11,12 @@
   let clientSecret = settings.oauthClientSecret || ''
   let syncProvider = settings.syncProvider || 'none'
   let syncOnSave = !!settings.syncOnSave
-  let dictationEngine = settings.dictationEngine || 'webspeech'
+  let dictationEngine = settings.dictationEngine || 'whisper'
+  let audioDeviceId = settings.audioDeviceId || ''
   let backupsToKeep = settings.backupsToKeep ?? 10
 
   function apply() {
-    onPatch({ oauthClientId: clientId, oauthClientSecret: clientSecret, syncProvider, syncOnSave, dictationEngine, backupsToKeep: Number(backupsToKeep) })
+    onPatch({ oauthClientId: clientId, oauthClientSecret: clientSecret, syncProvider, syncOnSave, dictationEngine, audioDeviceId, backupsToKeep: Number(backupsToKeep) })
   }
 </script>
 
@@ -27,10 +29,20 @@
     <label class="field">
       <span>Engine</span>
       <select bind:value={dictationEngine} on:change={apply}>
-        <option value="webspeech">Web Speech (online, free)</option>
-        <option value="whisper">Local Whisper (offline — phase 2)</option>
+        <option value="whisper">Local Whisper (offline, recommended)</option>
+        <option value="webspeech">Web Speech (online — unreliable in Electron)</option>
       </select>
     </label>
+    <label class="field">
+      <span>Microphone</span>
+      <select bind:value={audioDeviceId} on:change={apply}>
+        <option value="">System default</option>
+        {#each inputs as d}
+          <option value={d.deviceId}>{d.label}</option>
+        {/each}
+      </select>
+    </label>
+    <p class="note">Device selection only applies to the Whisper engine — Web Speech always uses the system default input.</p>
   </section>
 
   <section>
@@ -91,6 +103,7 @@
     border-radius: 8px; padding: 0.55rem 0.7rem; font-family: var(--font-ui); font-size: 0.9rem;
   }
   .check { display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem; color: var(--text); margin-bottom: 0.7rem; }
+  .note { font-size: 0.75rem; color: var(--muted); margin: 0.2rem 0 0; line-height: 1.4; }
   .creds { margin-top: 0.5rem; }
   .row { display: flex; align-items: center; gap: 0.9rem; margin-top: 0.5rem; }
   .ok { color: var(--accent); font-size: 0.8rem; letter-spacing: 0.1em; }

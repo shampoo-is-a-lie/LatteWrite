@@ -1,0 +1,36 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <!-- Base Background -->
+  <rect width="512" height="512" rx="112" fill="#2C1E16"/>
+
+  <!-- Golden Inner Border -->
+  <rect x="24" y="24" width="464" height="464" rx="88" fill="none" stroke="#8B5A2B" stroke-width="12"/>
+
+  <!-- Coffee Cup Handle -->
+  <path d="M 380 300 C 470 300, 470 212, 380 212" fill="none" stroke="#D4A373" stroke-width="24" stroke-linecap="round"/>
+
+  <!-- Espresso Cup Base -->
+  <circle cx="256" cy="256" r="160" fill="#432818" stroke="#D4A373" stroke-width="16"/>
+
+  <!-- Crema swirls framing the art -->
+  <path d="M 256 136 A 120 120 0 0 1 376 256" fill="none" stroke="#D4A373" stroke-width="12" stroke-linecap="round"/>
+  <path d="M 256 376 A 120 120 0 0 1 136 256" fill="none" stroke="#D4A373" stroke-width="12" stroke-linecap="round"/>
+
+  <!-- Latte-art rosetta / writing quill (cream) -->
+  <g fill="none" stroke="#FFE6A7" stroke-width="10" stroke-linecap="round">
+    <!-- rachis / stem -->
+    <path d="M 256 150 L 256 356"/>
+    <!-- barbs, sweeping up-and-out -->
+    <path d="M 256 178 Q 222 170 202 146"/>
+    <path d="M 256 178 Q 290 170 310 146"/>
+    <path d="M 256 212 Q 218 204 196 182"/>
+    <path d="M 256 212 Q 294 204 316 182"/>
+    <path d="M 256 246 Q 220 238 200 218"/>
+    <path d="M 256 246 Q 292 238 312 218"/>
+    <path d="M 256 280 Q 224 273 206 255"/>
+    <path d="M 256 280 Q 288 273 306 255"/>
+    <path d="M 256 312 Q 230 306 216 291"/>
+    <path d="M 256 312 Q 282 306 296 291"/>
+  </g>
+  <!-- nib tip -->
+  <path d="M 256 348 L 248 366 L 256 382 L 264 366 Z" fill="#FFE6A7"/>
+</svg>

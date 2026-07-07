@@ -20,9 +20,12 @@
 
   let saving = false
   let dirty = false
-  let presentation = false
+  let fullscreen = false
+  let chromeHidden = false
   let dictating = false
+  let dictLabel = ''
   let dictationCtl = null
+  let audioInputs = []
 
   let showStyles = false
   let showSettings = false
@@ -30,8 +33,8 @@
 
   let autosaveTimer = null
 
-  $: micAvailable = (settings.dictationEngine || 'webspeech') === 'whisper'
-    ? false
+  $: micAvailable = (settings.dictationEngine || 'whisper') === 'whisper'
+    ? true
     : !!(window.SpeechRecognition || window.webkitSpeechRecognition)
 
   function buildMeta() {
@@ -111,28 +114,41 @@
     }
   }
 
-  async function togglePresent() {
-    presentation = await window.api.window.togglePresentation()
+  async function toggleFullscreen() {
+    fullscreen = await window.api.window.togglePresentation()
   }
 
-  function toggleDictate() {
+  function toggleChrome() { chromeHidden = !chromeHidden }
+
+  async function enumerateAudioInputs() {
+    try {
+      // A one-shot getUserMedia unlocks device labels.
+      const s = await navigator.mediaDevices.getUserMedia({ audio: true })
+      s.getTracks().forEach(t => t.stop())
+    } catch { /* labels may stay blank */ }
+    const devices = await navigator.mediaDevices.enumerateDevices()
+    audioInputs = devices.filter(d => d.kind === 'audioinput')
+      .map(d => ({ deviceId: d.deviceId, label: d.label || 'Microphone' }))
+  }
+
+  async function toggleDictate() {
     if (dictating) {
       dictationCtl?.stop()
       dictating = false
+      dictLabel = ''
       return
     }
     if (!micAvailable) return
     try {
-      dictationCtl = createDictation(settings.dictationEngine || 'webspeech')
-      dictationCtl.start(
-        () => {},
-        (finalText) => {
-          if (editor && finalText) editor.commands.insertContent(finalText.replace(/\s+$/, '') + ' ')
-        }
-      )
       dictating = true
+      dictationCtl = createDictation(settings.dictationEngine || 'whisper', { deviceId: settings.audioDeviceId })
+      await dictationCtl.start(
+        (interim) => { dictLabel = interim },
+        (finalText) => { if (editor && finalText) editor.commands.insertContent(finalText.replace(/\s+$/, '') + ' ') }
+      )
     } catch (e) {
       dictating = false
+      dictLabel = ''
       alert(e.message)
     }
   }
@@ -152,13 +168,17 @@
     connected = false
   }
 
+  function openSettings() { enumerateAudioInputs(); showSettings = true }
+
   function onKey(e) {
     const ctrl = e.ctrlKey || e.metaKey
-    if (ctrl && e.key.toLowerCase() === 's') { e.preventDefault(); saveNow(true) }
-    else if (ctrl && e.shiftKey && e.key.toLowerCase() === 'p') { e.preventDefault(); togglePresent() }
-    else if (ctrl && e.key.toLowerCase() === 'd') { e.preventDefault(); toggleDictate() }
-    else if (ctrl && e.key.toLowerCase() === 'o') { e.preventDefault(); openDoc() }
-    else if (ctrl && e.key.toLowerCase() === 'n') { e.preventDefault(); newDoc() }
+    const k = e.key.toLowerCase()
+    if (ctrl && k === 's') { e.preventDefault(); saveNow(true) }
+    else if (ctrl && e.shiftKey && k === 'p') { e.preventDefault(); toggleFullscreen() }
+    else if (ctrl && e.shiftKey && k === 'h') { e.preventDefault(); toggleChrome() }
+    else if (ctrl && k === 'd') { e.preventDefault(); toggleDictate() }
+    else if (ctrl && k === 'o') { e.preventDefault(); openDoc() }
+    else if (ctrl && k === 'n') { e.preventDefault(); newDoc() }
     else if (e.key === 'Escape') { showStyles = false; showSettings = false }
   }
 
@@ -168,30 +188,33 @@
     fontScale = settings.fontScale || 1
     applyStyle(style, fontScale)
     connected = await window.api.auth.status()
-    window.api.window.onFullscreen(v => presentation = v)
+    window.api.window.onFullscreen(v => { fullscreen = v; chromeHidden = v })
     window.addEventListener('keydown', onKey)
   })
 </script>
 
-<div class="app-shell" class:presentation>
-  <TopBar
-    {editor} {bump} {title} {saving} {dirty}
-    onNew={newDoc} onOpen={openDoc} onSave={() => saveNow(true)}
-    onExport={exportAs} onStyles={() => showStyles = true}
-    onSettings={() => showSettings = true} onPresent={togglePresent} />
+<div class="app-shell">
+  {#if !chromeHidden}
+    <TopBar
+      {editor} {bump} {title} {saving} {dirty}
+      onNew={newDoc} onOpen={openDoc} onSave={() => saveNow(true)}
+      onExport={exportAs} onStyles={() => showStyles = true}
+      onSettings={openSettings} onPresent={toggleFullscreen} />
+  {/if}
 
   <div class="editor-scroll">
     <Editor {onReady} {onChange} {onSelect} />
   </div>
 
-  <PresentationBar {dictating} {presentation} {saving} {micAvailable}
-    onDictate={toggleDictate} onPresent={togglePresent} />
+  <PresentationBar
+    {dictating} {dictLabel} {fullscreen} {chromeHidden} {saving} {micAvailable}
+    onDictate={toggleDictate} onPresent={toggleFullscreen} onToggleChrome={toggleChrome} />
 
   {#if showStyles}
     <StylePicker current={style} onPick={pickStyle} onClose={() => showStyles = false} />
   {/if}
   {#if showSettings}
-    <Settings {settings} {connected} onPatch={patchSettings}
+    <Settings {settings} {connected} inputs={audioInputs} onPatch={patchSettings}
       onConnect={connectDrive} onDisconnect={disconnectDrive} onClose={() => showSettings = false} />
   {/if}
 </div>

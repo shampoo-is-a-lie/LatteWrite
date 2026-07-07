@@ -1,4 +1,4 @@
-import { app, shell, BrowserWindow, ipcMain, dialog } from 'electron'
+import { app, shell, BrowserWindow, ipcMain, dialog, session } from 'electron'
 import { join } from 'path'
 import fs from 'fs'
 import store from './store.js'
@@ -155,6 +155,12 @@ ipcMain.handle('window:presentation', () => {
 })
 
 app.whenReady().then(() => {
+  // Without this, Electron silently denies getUserMedia, so dictation never
+  // gets microphone access.
+  const MEDIA = ['media', 'audioCapture', 'microphone']
+  session.defaultSession.setPermissionRequestHandler((_wc, permission, cb) => cb(MEDIA.includes(permission)))
+  session.defaultSession.setPermissionCheckHandler((_wc, permission) => MEDIA.includes(permission))
+
   createWindow()
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow() })
 })

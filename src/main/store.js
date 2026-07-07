@@ -25,7 +25,8 @@ const store = new Store({
     backupsToKeep: 10,
 
     // Dictation: 'webspeech' (online, free) or 'whisper' (offline, local)
-    dictationEngine: 'webspeech',
+    dictationEngine: 'whisper',
+    audioDeviceId: '',
 
     // Sync
     syncProvider: 'none', // 'none' | 'gdrive' | 'onedrive'
