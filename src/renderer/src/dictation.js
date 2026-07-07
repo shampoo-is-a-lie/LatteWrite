@@ -53,6 +53,7 @@ class WebSpeechDictation {
 class WhisperDictation {
   constructor(opts = {}) {
     this.deviceId = opts.deviceId || ''
+    this.model = opts.model || WHISPER_MODEL
     this.active = false
     this.busy = false
   }
@@ -62,7 +63,7 @@ class WhisperDictation {
     onInterim('LOADING MODEL…')
     const { pipeline, env } = await import('@huggingface/transformers')
     env.allowLocalModels = false
-    this.transcriber = await pipeline('automatic-speech-recognition', WHISPER_MODEL)
+    this.transcriber = await pipeline('automatic-speech-recognition', this.model)
     if (!this.active) return
     onInterim('')
 

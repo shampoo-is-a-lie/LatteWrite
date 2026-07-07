@@ -12,11 +12,12 @@
   let syncProvider = settings.syncProvider || 'none'
   let syncOnSave = !!settings.syncOnSave
   let dictationEngine = settings.dictationEngine || 'whisper'
+  let whisperModel = settings.whisperModel || 'onnx-community/whisper-base.en'
   let audioDeviceId = settings.audioDeviceId || ''
   let backupsToKeep = settings.backupsToKeep ?? 10
 
   function apply() {
-    onPatch({ oauthClientId: clientId, oauthClientSecret: clientSecret, syncProvider, syncOnSave, dictationEngine, audioDeviceId, backupsToKeep: Number(backupsToKeep) })
+    onPatch({ oauthClientId: clientId, oauthClientSecret: clientSecret, syncProvider, syncOnSave, dictationEngine, whisperModel, audioDeviceId, backupsToKeep: Number(backupsToKeep) })
   }
 </script>
 
@@ -33,6 +34,16 @@
         <option value="webspeech">Web Speech (online — unreliable in Electron)</option>
       </select>
     </label>
+    {#if dictationEngine === 'whisper'}
+      <label class="field">
+        <span>Whisper model</span>
+        <select bind:value={whisperModel} on:change={apply}>
+          <option value="onnx-community/whisper-tiny.en">Tiny — fastest, lower accuracy</option>
+          <option value="onnx-community/whisper-base.en">Base — balanced</option>
+          <option value="onnx-community/whisper-small.en">Small — most accurate, slowest</option>
+        </select>
+      </label>
+    {/if}
     <label class="field">
       <span>Microphone</span>
       <select bind:value={audioDeviceId} on:change={apply}>
@@ -42,7 +53,7 @@
         {/each}
       </select>
     </label>
-    <p class="note">Device selection only applies to the Whisper engine — Web Speech always uses the system default input.</p>
+    <p class="note">Device selection only applies to the Whisper engine — Web Speech always uses the system default input. Switching model downloads it on first use.</p>
   </section>
 
   <section>

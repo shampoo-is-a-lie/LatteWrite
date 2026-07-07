@@ -141,7 +141,7 @@
     if (!micAvailable) return
     try {
       dictating = true
-      dictationCtl = createDictation(settings.dictationEngine || 'whisper', { deviceId: settings.audioDeviceId })
+      dictationCtl = createDictation(settings.dictationEngine || 'whisper', { deviceId: settings.audioDeviceId, model: settings.whisperModel })
       await dictationCtl.start(
         (interim) => { dictLabel = interim },
         (finalText) => { if (editor && finalText) editor.commands.insertContent(finalText.replace(/\s+$/, '') + ' ') }

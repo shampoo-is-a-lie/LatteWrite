@@ -26,6 +26,7 @@ const store = new Store({
 
     // Dictation: 'webspeech' (online, free) or 'whisper' (offline, local)
     dictationEngine: 'whisper',
+    whisperModel: 'onnx-community/whisper-base.en',
     audioDeviceId: '',
 
     // Sync
