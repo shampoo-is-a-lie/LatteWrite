@@ -1,0 +1,91 @@
+* { box-sizing: border-box; }
+
+html, body, #app {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-ui);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+::selection { background: var(--selection); }
+
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--bg);
+}
+
+/* ── Editor surface ─────────────────────────────────────────────────────────── */
+.editor-scroll {
+  flex: 1;
+  overflow-y: auto;
+  scroll-behavior: smooth;
+}
+
+.editor-page {
+  max-width: var(--measure);
+  margin: 0 auto;
+  padding: 6vh 2rem 40vh;
+}
+
+.ProseMirror {
+  outline: none;
+  font-family: var(--font-body);
+  font-size: calc(1.25rem * var(--font-scale));
+  line-height: 1.75;
+  color: var(--text);
+  caret-color: var(--caret);
+}
+
+.ProseMirror h1, .ProseMirror h2, .ProseMirror h3 {
+  font-family: var(--font-heading);
+  line-height: 1.2;
+  margin: 2rem 0 0.75rem;
+}
+.ProseMirror h1 { font-size: calc(2.4rem * var(--font-scale)); font-weight: 700; }
+.ProseMirror h2 { font-size: calc(1.8rem * var(--font-scale)); font-weight: 700; }
+.ProseMirror h3 { font-size: calc(1.4rem * var(--font-scale)); font-weight: 600; }
+.ProseMirror p { margin: 0 0 1.1rem; }
+
+.ProseMirror blockquote {
+  border-left: 3px solid var(--accent);
+  margin: 1.5rem 0;
+  padding-left: 1.25rem;
+  color: var(--muted);
+  font-style: italic;
+}
+.ProseMirror pre {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  padding: 1rem 1.25rem;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.95rem;
+  overflow-x: auto;
+}
+.ProseMirror hr { border: none; border-top: 1px solid var(--rule); margin: 2rem 0; }
+.ProseMirror a { color: var(--accent); }
+
+/* Placeholder */
+.ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: var(--muted);
+  opacity: 0.6;
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+/* Interim dictation text, before it's committed */
+.dictation-interim { color: var(--muted); opacity: 0.75; }
+
+/* ── Presentation mode: hide everything but the discreet controls ───────────── */
+.app-shell.presentation .topbar { opacity: 0; pointer-events: none; }
+.app-shell.presentation .editor-page { padding-top: 12vh; }

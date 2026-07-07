@@ -1,0 +1,7 @@
+node_modules/
+dist/
+out/
+*.AppImage
+.DS_Store
+LW_DATA/
+.claude/settings.local.json
