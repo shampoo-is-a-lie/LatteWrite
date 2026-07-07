@@ -19,6 +19,18 @@
   function apply() {
     onPatch({ oauthClientId: clientId, oauthClientSecret: clientSecret, syncProvider, syncOnSave, dictationEngine, whisperModel, audioDeviceId, backupsToKeep: Number(backupsToKeep) })
   }
+
+  let gpuMsg = ''
+  async function testGpu() {
+    gpuMsg = 'Checking…'
+    if (!navigator.gpu) { gpuMsg = 'WebGPU unavailable — navigator.gpu missing (will use CPU)'; return }
+    try {
+      const a = await navigator.gpu.requestAdapter()
+      if (!a) { gpuMsg = 'navigator.gpu present but no adapter (will use CPU)'; return }
+      const i = a.info || {}
+      gpuMsg = 'WebGPU OK — ' + (i.description || i.device || i.architecture || i.vendor || 'adapter found')
+    } catch (e) { gpuMsg = 'WebGPU error: ' + e.message }
+  }
 </script>
 
 <div class="scrim" on:click={onClose}></div>
@@ -54,6 +66,12 @@
       </select>
     </label>
     <p class="note">Device selection only applies to the Whisper engine — Web Speech always uses the system default input. Switching model downloads it on first use.</p>
+    {#if dictationEngine === 'whisper'}
+      <div class="row">
+        <button class="solid" on:click={testGpu}>TEST GPU</button>
+        {#if gpuMsg}<span class="note" style="margin:0">{gpuMsg}</span>{/if}
+      </div>
+    {/if}
   </section>
 
   <section>

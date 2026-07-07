@@ -11,10 +11,12 @@ import { exportHTML, exportMarkdown, exportDocx } from './export.js'
 
 const FILTERS = [{ name: 'LatteWrite', extensions: ['latte'] }]
 
-// Enable WebGPU for local Whisper acceleration (Linux Chromium needs the nudge).
+// Enable WebGPU for local Whisper acceleration. On Linux + NVIDIA, Chromium
+// blocklists the GPU by default, so we bypass the blocklist and force Vulkan.
 // transformers.js falls back to CPU/WASM if this doesn't take.
 app.commandLine.appendSwitch('enable-unsafe-webgpu')
 app.commandLine.appendSwitch('enable-features', 'Vulkan')
+app.commandLine.appendSwitch('ignore-gpu-blocklist')
 
 let mainWindow = null
 
