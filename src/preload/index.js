@@ -29,6 +29,9 @@ contextBridge.exposeInMainWorld('api', {
   fonts: {
     load: (family) => ipcRenderer.invoke('fonts:load', family)
   },
+  spell: {
+    set: (enabled) => ipcRenderer.invoke('spell:set', enabled)
+  },
   window: {
     togglePresentation: () => ipcRenderer.invoke('window:presentation'),
     onFullscreen: (cb) => {

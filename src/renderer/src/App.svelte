@@ -174,6 +174,19 @@
     if (style === name) pickStyle('Espresso')
   }
 
+  // ── Zoom (editor text only) ─────────────────────────────────────────────────
+  function zoomBy(d) {
+    fontScale = Math.min(2.5, Math.max(0.6, Math.round((fontScale + d) * 10) / 10))
+    applyCurrent()
+    window.api.settings.set({ fontScale })
+  }
+  function zoomReset() { fontScale = 1; applyCurrent(); window.api.settings.set({ fontScale }) }
+
+  async function setSpellcheck(v) {
+    await window.api.spell.set(v)
+    settings = { ...settings, spellcheck: v }
+  }
+
   // ── Export ────────────────────────────────────────────────────────────────
   async function exportAs(kind) {
     if (!editor) return
@@ -268,6 +281,9 @@
     else if (ctrl && k === 'd') { e.preventDefault(); toggleDictate() }
     else if (ctrl && k === 'o') { e.preventDefault(); openDoc() }
     else if (ctrl && k === 'n') { e.preventDefault(); newDoc() }
+    else if (ctrl && (k === '=' || k === '+')) { e.preventDefault(); zoomBy(0.1) }
+    else if (ctrl && k === '-') { e.preventDefault(); zoomBy(-0.1) }
+    else if (ctrl && k === '0') { e.preventDefault(); zoomReset() }
     else if (e.key === 'Escape') { showStyles = false; showSettings = false }
   }
 
@@ -287,10 +303,11 @@
 <div class="app-shell">
   {#if !chromeHidden}
     <TopBar
-      {editor} {bump} {title} {saving} {dirty}
+      {editor} {bump} {title} {saving} {dirty} zoom={fontScale}
       onNew={newDoc} onOpen={openDoc} onSave={() => saveNow(true)}
       onExport={exportAs} onStyles={() => showStyles = true}
-      onSettings={openSettings} onPresent={toggleFullscreen} />
+      onSettings={openSettings} onPresent={toggleFullscreen}
+      onZoomIn={() => zoomBy(0.1)} onZoomOut={() => zoomBy(-0.1)} onZoomReset={zoomReset} />
   {/if}
 
   <div class="editor-scroll">
@@ -309,7 +326,7 @@
     <Settings {settings} {connected} inputs={audioInputs}
       headingFamily={curObj.fonts.heading} bodyFamily={curObj.fonts.body}
       isDraft={!!draft} {editingLabel}
-      onPatch={patchSettings} onSetFont={setFont} onSaveStyle={saveStyle}
+      onPatch={patchSettings} onSetFont={setFont} onSaveStyle={saveStyle} onSpellcheck={setSpellcheck}
       onConnect={connectDrive} onDisconnect={disconnectDrive} onClose={() => showSettings = false} />
   {/if}
 </div>

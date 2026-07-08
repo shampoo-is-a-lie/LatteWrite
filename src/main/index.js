@@ -1,4 +1,4 @@
-import { app, shell, BrowserWindow, ipcMain, dialog, session } from 'electron'
+import { app, shell, BrowserWindow, ipcMain, dialog, session, Menu, MenuItem } from 'electron'
 import { join } from 'path'
 import fs from 'fs'
 import store from './store.js'
@@ -35,6 +35,29 @@ function createWindow() {
       contextIsolation: true,
       sandbox: false
     }
+  })
+
+  const ses = mainWindow.webContents.session
+  ses.setSpellCheckerLanguages(['en-US'])
+  ses.setSpellCheckerEnabled(store.get('spellcheck'))
+
+  // Right-click a misspelled word for suggestions + add-to-dictionary; plus the
+  // usual cut/copy/paste on editable text.
+  mainWindow.webContents.on('context-menu', (_e, params) => {
+    const menu = new Menu()
+    if (params.misspelledWord) {
+      for (const s of params.dictionarySuggestions) {
+        menu.append(new MenuItem({ label: s, click: () => mainWindow.webContents.replaceMisspelling(s) }))
+      }
+      menu.append(new MenuItem({ type: 'separator' }))
+      menu.append(new MenuItem({ label: 'Add to dictionary', click: () => ses.addWordToSpellCheckerDictionary(params.misspelledWord) }))
+      menu.append(new MenuItem({ type: 'separator' }))
+    }
+    if (params.editFlags.canCut) menu.append(new MenuItem({ role: 'cut' }))
+    if (params.editFlags.canCopy) menu.append(new MenuItem({ role: 'copy' }))
+    if (params.editFlags.canPaste) menu.append(new MenuItem({ role: 'paste' }))
+    if (params.editFlags.canSelectAll) menu.append(new MenuItem({ role: 'selectAll' }))
+    if (menu.items.length) menu.popup()
   })
 
   mainWindow.on('ready-to-show', () => mainWindow.show())
@@ -157,6 +180,13 @@ ipcMain.handle('export:docx', async (_e, payload) => {
 
 // ── Fonts ─────────────────────────────────────────────────────────────────────
 ipcMain.handle('fonts:load', (_e, family) => loadFontCss(family))
+
+// ── Spellcheck ────────────────────────────────────────────────────────────────
+ipcMain.handle('spell:set', (_e, enabled) => {
+  store.set('spellcheck', enabled)
+  session.defaultSession.setSpellCheckerEnabled(enabled)
+  return enabled
+})
 
 // ── Window ────────────────────────────────────────────────────────────────────
 ipcMain.handle('window:presentation', () => {

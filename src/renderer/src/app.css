@@ -72,6 +72,10 @@ body {
 }
 .ProseMirror hr { border: none; border-top: 1px solid var(--rule); margin: 2rem 0; }
 .ProseMirror a { color: var(--accent); }
+.ProseMirror s { text-decoration: line-through; }
+
+/* Highlighted text keeps dark ink so it's readable on any (usually light) highlight colour */
+.ProseMirror mark { color: #1a1a1a; border-radius: 3px; padding: 0 2px; box-decoration-break: clone; }
 
 /* Placeholder */
 .ProseMirror p.is-editor-empty:first-child::before {

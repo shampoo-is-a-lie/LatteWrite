@@ -10,6 +10,7 @@
   export let onPatch = () => {}
   export let onSetFont = () => {}
   export let onSaveStyle = () => {}
+  export let onSpellcheck = () => {}
   export let onConnect = () => {}
   export let onDisconnect = () => {}
   export let onClose = () => {}
@@ -25,6 +26,7 @@
   let fh = headingFamily
   let fb = bodyFamily
   let newStyleName = ''
+  let spellcheck = settings.spellcheck !== false
   // Reflect the live style/draft fonts (e.g. after a fork) back into the inputs.
   $: fh = headingFamily
   $: fb = bodyFamily
@@ -141,6 +143,14 @@
         {#if gpuMsg}<span class="note" style="margin:0">{gpuMsg}</span>{/if}
       </div>
     {/if}
+  </section>
+
+  <section>
+    <h3>EDITOR</h3>
+    <label class="check">
+      <input type="checkbox" bind:checked={spellcheck} on:change={() => onSpellcheck(spellcheck)} /> Check spelling (red underline)
+    </label>
+    <p class="note">Right-click an underlined word for suggestions and "Add to dictionary".</p>
   </section>
 
   <section>

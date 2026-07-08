@@ -7,6 +7,7 @@
   import TextAlign from '@tiptap/extension-text-align'
   import TextStyle from '@tiptap/extension-text-style'
   import Color from '@tiptap/extension-color'
+  import Highlight from '@tiptap/extension-highlight'
   import FontFamily from '@tiptap/extension-font-family'
 
   export let content = null
@@ -25,6 +26,7 @@
         Underline,
         TextStyle,
         Color,
+        Highlight.configure({ multicolor: true }),
         FontFamily,
         TextAlign.configure({ types: ['heading', 'paragraph'] }),
         Placeholder.configure({ placeholder: 'Start writing…' })

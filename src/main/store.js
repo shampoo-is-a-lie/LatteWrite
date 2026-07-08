@@ -24,6 +24,7 @@ const store = new Store({
     recentFiles: [],
     autosaveMs: 1200,
     backupsToKeep: 10,
+    spellcheck: true,
 
     // Dictation: 'webspeech' (online, free) or 'whisper' (offline, local)
     dictationEngine: 'whisper',
