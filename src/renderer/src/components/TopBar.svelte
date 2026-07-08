@@ -25,6 +25,7 @@
   let titleVal = title
   let editingTitle = false
   $: if (!editingTitle) titleVal = title
+
   let textColor = '#e06c75'
   let hlColor = '#ffe08a'
   let savedSel = null
@@ -50,14 +51,14 @@
 </script>
 
 <div class="topbar">
-  <div class="group">
+  <div class="row main">
     <div class="filewrap">
       <button on:click={() => showFile = !showFile}>FILE</button>
       {#if showFile}
         <div class="menu">
           <button on:click={() => fileDo(onNew)}>New</button>
           <button on:click={() => fileDo(onOpen)}>Open…</button>
-          <button on:click={() => fileDo(onSave)}>Save</button>
+          <button on:click={() => fileDo(onSave)}>{saving ? 'Saving…' : 'Save'}</button>
           <div class="menu-sep"></div>
           <button on:click={() => fileDo(() => onExport('pdf'))}>Export PDF</button>
           <button on:click={() => fileDo(() => onExport('docx'))}>Export DOCX</button>
@@ -66,9 +67,35 @@
         </div>
       {/if}
     </div>
+    <input class="title-input" bind:value={titleVal} spellcheck="false" title="Rename document"
+      on:focus={() => editingTitle = true}
+      on:blur={() => { editingTitle = false; onRename(titleVal) }}
+      on:keydown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); else if (e.key === 'Escape') { titleVal = title; e.currentTarget.blur() } }} />
+    {#if dirty}<span class="dirty" title="Unsaved changes">*</span>{/if}
+
+    <div class="spacer"></div>
+
+    <button on:click={onStyles}>STYLE</button>
+    <button on:click={onSettings}>SETTINGS</button>
+    <button class="present" on:click={onPresent}>PRESENT</button>
+    <div class="winctl">
+      <button class="wc" on:click={onMinimize} title="Minimize">
+        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      </button>
+      <button class="wc" on:click={onMaximize} title={maximized ? 'Restore' : 'Maximize'}>
+        {#if maximized}
+          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="8" y="5" width="11" height="11" rx="1.5"/><path d="M16 19H6a1.5 1.5 0 0 1-1.5-1.5V8"/></svg>
+        {:else}
+          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="5" y="5" width="14" height="14" rx="1.5"/></svg>
+        {/if}
+      </button>
+      <button class="wc wc-close" on:click={onClose} title="Close">
+        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
+      </button>
+    </div>
   </div>
 
-  <div class="group fmt">
+  <div class="row fmt">
     <button class:on={s.bold} on:click={cmd(c => c.toggleBold())} title="Bold (Ctrl+B)"><b>B</b></button>
     <button class:on={s.italic} on:click={cmd(c => c.toggleItalic())} title="Italic (Ctrl+I)"><i>I</i></button>
     <button class:on={s.underline} on:click={cmd(c => c.toggleUnderline())} title="Underline (Ctrl+U)"><u>U</u></button>
@@ -95,36 +122,11 @@
     <button class:on={s.center} on:click={cmd(c => c.setTextAlign('center'))} title="Align center">&#8677;</button>
     <span class="sep"></span>
     <button on:click={clearFormat} title="Clear formatting — reset selection to the Style default">CLEAR</button>
-  </div>
 
-  <div class="group right">
     <div class="zoom">
       <button on:click={onZoomOut} title="Zoom out (Ctrl -)">&minus;</button>
       <button class="zval" on:click={onZoomReset} title="Reset zoom (Ctrl 0)">{Math.round(zoom * 100)}%</button>
       <button on:click={onZoomIn} title="Zoom in (Ctrl +)">+</button>
-    </div>
-    <input class="title-input" bind:value={titleVal} spellcheck="false" title="Rename document"
-      on:focus={() => editingTitle = true}
-      on:blur={() => { editingTitle = false; onRename(titleVal) }}
-      on:keydown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); else if (e.key === 'Escape') { titleVal = title; e.currentTarget.blur() } }} />
-    {#if dirty}<span class="dirty" title="Unsaved changes">*</span>{/if}
-    <button on:click={onStyles}>STYLE</button>
-    <button on:click={onSettings}>SETTINGS</button>
-    <button class="present" on:click={onPresent}>PRESENT</button>
-    <div class="winctl">
-      <button class="wc" on:click={onMinimize} title="Minimize">
-        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>
-      </button>
-      <button class="wc" on:click={onMaximize} title={maximized ? 'Restore' : 'Maximize'}>
-        {#if maximized}
-          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="8" y="5" width="11" height="11" rx="1.5"/><path d="M16 19H6a1.5 1.5 0 0 1-1.5-1.5V8"/></svg>
-        {:else}
-          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="5" y="5" width="14" height="14" rx="1.5"/></svg>
-        {/if}
-      </button>
-      <button class="wc wc-close" on:click={onClose} title="Close">
-        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
-      </button>
     </div>
   </div>
 </div>
@@ -133,14 +135,16 @@
 
 <style>
   .topbar {
-    display: flex; align-items: center; gap: 1rem;
-    padding: 0.5rem 0.9rem; background: var(--surface);
-    border-bottom: 1px solid var(--rule); flex-wrap: wrap;
+    display: flex; flex-direction: column;
+    background: var(--surface); border-bottom: 1px solid var(--rule);
     -webkit-app-region: drag;
   }
   .topbar button, .topbar input, .topbar label, .topbar .menu, .topbar .zoom, .topbar .filewrap { -webkit-app-region: no-drag; }
-  .group { display: flex; align-items: center; gap: 0.3rem; }
-  .group.right { margin-left: auto; }
+  .row { display: flex; align-items: center; gap: 0.3rem; padding: 0.4rem 0.9rem; }
+  .row.main { gap: 0.55rem; }
+  .row.fmt { flex-wrap: wrap; border-top: 1px solid color-mix(in srgb, var(--rule) 55%, transparent); }
+  .spacer { flex: 1; align-self: stretch; min-width: 1rem; }
+
   button {
     font-family: var(--font-ui); font-size: 0.78rem; letter-spacing: 0.04em;
     background: transparent; color: var(--text); border: 1px solid transparent;
@@ -150,14 +154,15 @@
   button.on { color: var(--accent); background: color-mix(in srgb, var(--accent) 20%, transparent); }
   button.present { background: var(--accent); color: var(--bg); font-weight: 700; }
   .sep { width: 1px; height: 20px; background: var(--rule); margin: 0 0.35rem; }
+
   .title-input {
     background: transparent; border: 1px solid transparent; color: var(--muted);
-    font-family: var(--font-ui); font-size: 0.8rem; padding: 0.25rem 0.45rem; border-radius: 6px;
-    max-width: 14rem; min-width: 5rem; text-overflow: ellipsis;
+    font-family: var(--font-ui); font-size: 0.82rem; padding: 0.3rem 0.5rem; border-radius: 6px;
+    max-width: 22rem; min-width: 6rem;
   }
   .title-input:hover { border-color: var(--rule); }
   .title-input:focus { outline: none; border-color: var(--accent); color: var(--text); background: var(--bg); }
-  .dirty { color: var(--accent); font-size: 0.9rem; margin: 0 0.3rem 0 -0.15rem; }
+  .dirty { color: var(--accent); font-size: 0.9rem; margin-left: -0.15rem; }
 
   .colorbtn { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 2rem; height: 1.85rem; border-radius: 7px; cursor: pointer; }
   .colorbtn:hover { background: color-mix(in srgb, var(--accent) 16%, transparent); }
@@ -166,7 +171,7 @@
   .hi { font-weight: 700; color: #1a1a1a; border-radius: 3px; padding: 0 3px; }
   .clr { min-width: auto; padding: 0.35rem 0.4rem; font-size: 0.68rem; color: var(--muted); }
 
-  .zoom { display: flex; align-items: center; gap: 0.15rem; border: 1px solid var(--rule); border-radius: 8px; padding: 0.1rem; margin-right: 0.4rem; }
+  .zoom { display: flex; align-items: center; gap: 0.15rem; border: 1px solid var(--rule); border-radius: 8px; padding: 0.1rem; margin-left: auto; }
   .zoom button { min-width: 1.7rem; padding: 0.25rem 0.4rem; }
   .zoom .zval { min-width: 3rem; font-variant-numeric: tabular-nums; }
 
