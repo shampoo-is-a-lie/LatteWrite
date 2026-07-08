@@ -1,4 +1,5 @@
 <script>
+  import DocSearch from './DocSearch.svelte'
   export let editor = null
   export let bump = 0
   export let title = 'Untitled'
@@ -20,6 +21,7 @@
   export let onMaximize = () => {}
   export let onClose = () => {}
   export let onRename = () => {}
+  export let onOpenDoc = () => {}
 
   let showFile = false
   let titleVal = title
@@ -74,6 +76,8 @@
       on:keydown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); else if (e.key === 'Escape') { titleVal = title; e.currentTarget.blur() } }} />
     {#if dirty}<span class="dirty" title="Unsaved changes">*</span>{/if}
 
+    <div class="spacer"></div>
+    <div class="searchwrap"><DocSearch onOpen={onOpenDoc} /></div>
     <div class="spacer"></div>
 
     <button on:click={onStyles}>STYLE</button>
@@ -144,7 +148,8 @@
   .row { display: flex; align-items: center; gap: 0.3rem; padding: 0.4rem 0.9rem; }
   .row.main { gap: 0.55rem; }
   .row.fmt { flex-wrap: wrap; border-top: 1px solid color-mix(in srgb, var(--rule) 55%, transparent); }
-  .spacer { flex: 1; align-self: stretch; min-width: 1rem; }
+  .spacer { flex: 1; align-self: stretch; min-width: 0.5rem; }
+  .searchwrap { flex: 0 1 320px; min-width: 140px; }
 
   button {
     font-family: var(--font-ui); font-size: 0.78rem; letter-spacing: 0.04em;

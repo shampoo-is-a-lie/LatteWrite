@@ -80,6 +80,14 @@ function createWindow() {
   }
 }
 
+// The "latte" folder next to the AppImage (cwd in dev) — where documents live
+// and what the top-bar search looks through.
+function docsDir() {
+  const dir = process.env.APPIMAGE ? join(dirname(process.env.APPIMAGE), 'latte') : join(process.cwd(), 'latte')
+  try { fs.mkdirSync(dir, { recursive: true }) } catch {}
+  return dir
+}
+
 function addRecent(filePath) {
   const recent = [filePath, ...store.get('recentFiles').filter(f => f !== filePath)].slice(0, 12)
   store.set('recentFiles', recent)
@@ -118,7 +126,7 @@ ipcMain.handle('doc:save', async (_e, { filePath, doc, meta }) => {
   let target = filePath
   if (!target) {
     const res = await dialog.showSaveDialog(mainWindow, {
-      defaultPath: `${meta?.title || 'Untitled'}.latte`,
+      defaultPath: join(docsDir(), `${meta?.title || 'Untitled'}.latte`),
       filters: FILTERS
     })
     if (res.canceled || !res.filePath) return null
@@ -133,7 +141,7 @@ ipcMain.handle('doc:save', async (_e, { filePath, doc, meta }) => {
 
 ipcMain.handle('doc:saveAs', async (_e, { doc, meta }) => {
   const res = await dialog.showSaveDialog(mainWindow, {
-    defaultPath: `${meta?.title || 'Untitled'}.latte`,
+    defaultPath: join(docsDir(), `${meta?.title || 'Untitled'}.latte`),
     filters: FILTERS
   })
   if (res.canceled || !res.filePath) return null
@@ -143,6 +151,20 @@ ipcMain.handle('doc:saveAs', async (_e, { doc, meta }) => {
 })
 
 ipcMain.handle('doc:recent', () => store.get('recentFiles').filter(f => fs.existsSync(f)))
+
+// Search the latte folder by filename.
+ipcMain.handle('docs:search', (_e, query) => {
+  const dir = docsDir()
+  const q = (query || '').toLowerCase()
+  try {
+    return fs.readdirSync(dir)
+      .filter(f => f.toLowerCase().endsWith('.latte'))
+      .filter(f => !q || f.toLowerCase().includes(q))
+      .sort((a, b) => a.localeCompare(b))
+      .slice(0, 40)
+      .map(f => ({ name: f.replace(/\.latte$/i, ''), path: join(dir, f) }))
+  } catch { return [] }
+})
 
 ipcMain.handle('doc:rename', (_e, { filePath, name }) => {
   const clean = (name || '').replace(/[\/\\:*?"<>|]/g, '_').trim() || 'Untitled'

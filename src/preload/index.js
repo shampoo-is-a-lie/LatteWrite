@@ -16,7 +16,8 @@ contextBridge.exposeInMainWorld('api', {
     save: (payload) => ipcRenderer.invoke('doc:save', payload),
     saveAs: (payload) => ipcRenderer.invoke('doc:saveAs', payload),
     recent: () => ipcRenderer.invoke('doc:recent'),
-    rename: (payload) => ipcRenderer.invoke('doc:rename', payload)
+    rename: (payload) => ipcRenderer.invoke('doc:rename', payload),
+    search: (query) => ipcRenderer.invoke('docs:search', query)
   },
   sync: {
     now: (filePath) => ipcRenderer.invoke('sync:now', filePath)

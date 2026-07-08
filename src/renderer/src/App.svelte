@@ -159,6 +159,11 @@
     if (res) loadDoc(res)
   }
 
+  async function openByPath(path) {
+    const res = await window.api.doc.openPath(path)
+    if (res) loadDoc(res)
+  }
+
   function loadDoc(res) {
     filePath = res.filePath
     editor.commands.setContent(res.doc || '')
@@ -443,7 +448,8 @@
       onExport={exportAs} onStyles={() => showStyles = true}
       onSettings={openSettings} onPresent={toggleFullscreen}
       onZoomIn={() => zoomBy(0.1)} onZoomOut={() => zoomBy(-0.1)} onZoomReset={zoomReset}
-      onMinimize={winMin} onMaximize={winMax} onClose={winClose} onRename={commitTitle} />
+      onMinimize={winMin} onMaximize={winMax} onClose={winClose} onRename={commitTitle}
+      onOpenDoc={openByPath} />
   {/if}
 
   <div class="editor-scroll" class:typewriter bind:this={scroller}>
