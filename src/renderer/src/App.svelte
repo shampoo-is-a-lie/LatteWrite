@@ -80,17 +80,15 @@
   function onSelect() { bump++; updatePresentation() }
 
   // ── Presentation modes ──────────────────────────────────────────────────────
-  function currentBlockEl() {
-    const { view, state } = editor
-    const $head = state.selection.$head
-    const pos = $head.depth ? $head.before(1) : $head.pos
-    const node = view.nodeDOM(pos)
-    return node && node.nodeType === 1 ? node : null
+  // Index of the top-level block containing the caret. Maps 1:1 to the editor's
+  // direct child elements (same order as the document's top-level nodes).
+  function currentBlockIndex() {
+    if (!editor) return 0
+    return editor.state.selection.$head.index(0)
   }
 
-  function currentBlockIndex() {
-    const el = currentBlockEl()
-    return el ? [...editor.view.dom.children].indexOf(el) : 0
+  function currentBlockEl() {
+    return editor?.view.dom.children[currentBlockIndex()] || null
   }
 
   function scrollCaretToCenter() {
