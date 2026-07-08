@@ -20,6 +20,32 @@
     onPatch({ oauthClientId: clientId, oauthClientSecret: clientSecret, syncProvider, syncOnSave, dictationEngine, whisperModel, audioDeviceId, backupsToKeep: Number(backupsToKeep) })
   }
 
+  let micLevel = 0
+  let micTesting = false
+  async function testMic() {
+    if (micTesting) { micTesting = false; return }
+    micTesting = true
+    let stream
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: audioDeviceId ? { deviceId: { exact: audioDeviceId } } : true })
+    } catch (e) { micTesting = false; gpuMsg = 'Mic error: ' + e.message; return }
+    const ctx = new AudioContext()
+    const an = ctx.createAnalyser()
+    an.fftSize = 512
+    ctx.createMediaStreamSource(stream).connect(an)
+    const buf = new Uint8Array(an.fftSize)
+    const t0 = performance.now()
+    const frame = () => {
+      an.getByteTimeDomainData(buf)
+      let sum = 0
+      for (let i = 0; i < buf.length; i++) { const v = (buf[i] - 128) / 128; sum += v * v }
+      micLevel = Math.min(1, Math.sqrt(sum / buf.length) * 5)
+      if (micTesting && performance.now() - t0 < 8000) requestAnimationFrame(frame)
+      else { micTesting = false; micLevel = 0; stream.getTracks().forEach(t => t.stop()); ctx.close() }
+    }
+    requestAnimationFrame(frame)
+  }
+
   let gpuMsg = ''
   async function testGpu() {
     gpuMsg = 'Checking…'
@@ -65,6 +91,11 @@
         {/each}
       </select>
     </label>
+    <div class="row">
+      <button class="solid" on:click={testMic}>{micTesting ? 'STOP' : 'TEST MIC'}</button>
+      <div class="meter"><div class="meter-fill" style="width:{micLevel * 100}%"></div></div>
+    </div>
+    <p class="note">Speak — the bar should move. If it stays flat, pick a different microphone above.</p>
     <p class="note">Device selection only applies to the Whisper engine — Web Speech always uses the system default input. Switching model downloads it on first use.</p>
     {#if dictationEngine === 'whisper'}
       <div class="row">
@@ -133,6 +164,8 @@
   }
   .check { display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem; color: var(--text); margin-bottom: 0.7rem; }
   .note { font-size: 0.75rem; color: var(--muted); margin: 0.2rem 0 0; line-height: 1.4; }
+  .meter { flex: 1; height: 10px; background: var(--bg); border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; }
+  .meter-fill { height: 100%; background: var(--accent); transition: width 0.06s linear; }
   .creds { margin-top: 0.5rem; }
   .row { display: flex; align-items: center; gap: 0.9rem; margin-top: 0.5rem; }
   .ok { color: var(--accent); font-size: 0.8rem; letter-spacing: 0.1em; }

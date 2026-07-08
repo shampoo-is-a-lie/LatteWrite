@@ -1,28 +1,35 @@
 // Speech-to-text. Two engines behind one interface:
 //   whisper   — local/offline via transformers.js. Streaming: it re-transcribes
 //               the growing current phrase every ~0.5s (shown as live interim
-//               text) and commits it when voice-activity detection sees a pause.
-//               Prefers WebGPU, falls back to CPU/WASM.
-//   webspeech — Chromium's webkitSpeechRecognition. Streams natively but is
-//               unreliable in Electron (ships without Chrome's Google Speech key)
-//               and can't pick an input device.
-// Both drive the same callbacks:
-//   onInterim(text) — live, un-committed hypothesis (rendered greyed)
-//   onFinal(text)   — committed text
-//   onStatus(text)  — short status for the control pill
+//               text) and commits on a voice-activity pause. Prefers WebGPU.
+//   webspeech — Chromium's webkitSpeechRecognition; unreliable in Electron.
+// Callbacks: onInterim(text), onFinal(text), onStatus(text)
 
 const WHISPER_MODEL = 'onnx-community/whisper-base.en'
 
-const VOICE_RMS = 0.008    // above this = speech
-const SILENCE_MS = 900     // pause this long → commit the phrase
-const MIN_AUDIO_S = 0.4    // don't transcribe less than this
-const GROWTH_S = 0.25      // only re-transcribe once this much new audio arrived
+const VOICE_RMS = 0.01     // per-block RMS above this counts as speech
+const SILENCE_MS = 900     // pause this long (after speech) → commit
+const MIN_VOICED_S = 0.3   // need this much actual voice before transcribing
+const GROWTH_S = 0.25      // re-transcribe once this much new audio arrived
 const MAX_PHRASE_S = 18    // force a commit on very long unbroken speech
 const TICK_MS = 500
 
 export function createDictation(engine = 'whisper', opts = {}) {
   if (engine === 'whisper') return new WhisperDictation(opts)
   return new WebSpeechDictation(opts)
+}
+
+// Whisper emits these markers for music/noise/silence — drop them.
+function cleanText(raw) {
+  const s = (raw || '')
+    .replace(/\[[^\]]*\]/g, ' ')   // [BLANK_AUDIO], [Music]
+    .replace(/\([^)]*\)/g, ' ')    // (upbeat music)
+    .replace(/\*[^*]*\*/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  const junk = new Set(['thanks for watching', 'thank you for watching', 'please subscribe', 'you'])
+  if (!s || junk.has(s.toLowerCase())) return ''
+  return s
 }
 
 class WebSpeechDictation {
@@ -87,65 +94,75 @@ class WhisperDictation {
     const proc = ctx.createScriptProcessor(4096, 1, 1)
     this.proc = proc
 
-    this.phrase = []
-    this.phraseSamples = 0
-    this.processedSamples = 0
-    this.lastVoice = performance.now()
+    this.reset()
+    this.lastVoice = 0
 
     proc.onaudioprocess = (e) => {
       if (!this.active) return
       const data = e.inputBuffer.getChannelData(0)
       let sum = 0
       for (let i = 0; i < data.length; i++) sum += data[i] * data[i]
-      if (Math.sqrt(sum / data.length) > VOICE_RMS) this.lastVoice = performance.now()
+      const rms = Math.sqrt(sum / data.length)
+      if (rms > VOICE_RMS) { this.lastVoice = performance.now(); this.voiced += data.length }
       this.phrase.push(new Float32Array(data))
-      this.phraseSamples += data.length
+      this.samples += data.length
     }
+    // A muted sink keeps the ScriptProcessor pulling without echoing the mic.
+    const sink = ctx.createGain()
+    sink.gain.value = 0
     source.connect(proc)
-    proc.connect(ctx.destination)
+    proc.connect(sink)
+    sink.connect(ctx.destination)
 
     onStatus(`LISTENING · ${this.device}`)
     this.loop = setInterval(() => this.tick(onInterim, onFinal), TICK_MS)
   }
 
+  reset() { this.phrase = []; this.samples = 0; this.processed = 0; this.voiced = 0 }
+
   async load(pipeline, onStatus) {
     const attempts = [
-      { device: 'webgpu', dtype: 'fp16', label: 'GPU' },
+      { device: 'webgpu', dtype: { encoder_model: 'fp16', decoder_model_merged: 'q4' }, label: 'GPU' },
+      { device: 'webgpu', dtype: 'fp32', label: 'GPU' },
       { device: 'wasm', dtype: 'q8', label: 'CPU' }
     ]
+    let lastErr
     for (const a of attempts) {
       try {
         onStatus(`LOADING · ${a.label}…`)
         const t = await pipeline('automatic-speech-recognition', this.model, { device: a.device, dtype: a.dtype })
         this.device = a.label
         return t
-      } catch { /* try next backend */ }
+      } catch (e) { lastErr = e; if (a.device === 'webgpu') console.warn('[dictation] WebGPU load failed:', e) }
     }
-    throw new Error('Could not initialise Whisper')
+    throw lastErr || new Error('Could not initialise Whisper')
   }
 
   async tick(onInterim, onFinal) {
     if (this.busy || !this.active) return
-    if (this.phraseSamples < this.rate * MIN_AUDIO_S) return
+
+    const hasVoice = this.voiced > this.rate * MIN_VOICED_S
+    if (!hasVoice) {
+      // No speech yet — don't feed silence to Whisper. Trim the idle buffer.
+      if (this.samples > this.rate * 2) this.reset()
+      return
+    }
 
     const now = performance.now()
     const silent = (now - this.lastVoice) > SILENCE_MS
-    const tooLong = this.phraseSamples > this.rate * MAX_PHRASE_S
-    const grew = this.phraseSamples - this.processedSamples > this.rate * GROWTH_S
+    const tooLong = this.samples > this.rate * MAX_PHRASE_S
+    const grew = this.samples - this.processed > this.rate * GROWTH_S
     if (!grew && !silent && !tooLong) return
 
     this.busy = true
-    this.processedSamples = this.phraseSamples
+    this.processed = this.samples
     try {
       const audio = downsample(mergeFloat32(this.phrase), this.rate, 16000)
       const out = await this.transcriber(audio)
-      const text = (out.text || '').trim()
+      const text = cleanText(out.text)
       if (silent || tooLong) {
         if (text) onFinal(text)
-        this.phrase = []
-        this.phraseSamples = 0
-        this.processedSamples = 0
-        this.lastVoice = performance.now()
+        this.reset()
       } else if (text) {
         onInterim(text)
       }
