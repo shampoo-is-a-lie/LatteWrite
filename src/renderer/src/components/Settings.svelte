@@ -75,6 +75,8 @@
     requestAnimationFrame(frame)
   }
 
+  let pane = 'style'
+
   let gpuMsg = ''
   async function testGpu() {
     gpuMsg = 'Checking…'
@@ -90,12 +92,38 @@
 
 <div class="scrim" on:click={onClose}></div>
 <div class="panel">
-  <h2>SETTINGS</h2>
+  <div class="cp-header">
+    <h2 class="cp-title">Settings</h2>
+    <button class="cp-close" title="Close" on:click={() => { apply(); onClose() }}>
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
 
-  <section>
-    <h3>STYLE — {editingLabel}</h3>
+  <div class="cp-body">
+    <nav class="cp-rail">
+      <button class="cp-rail-item" class:active={pane === 'style'} on:click={() => pane = 'style'}>
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg><span>Style</span>
+      </button>
+      <button class="cp-rail-item" class:active={pane === 'dictation'} on:click={() => pane = 'dictation'}>
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/></svg><span>Dictation</span>
+      </button>
+      <button class="cp-rail-item" class:active={pane === 'editor'} on:click={() => pane = 'editor'}>
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg><span>Editor</span>
+      </button>
+      <button class="cp-rail-item" class:active={pane === 'sync'} on:click={() => pane = 'sync'}>
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg><span>Cloud Sync</span>
+      </button>
+      <button class="cp-rail-item" class:active={pane === 'backups'} on:click={() => pane = 'backups'}>
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="5" rx="1"/><path d="M4 9v9a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9"/><line x1="10" y1="13" x2="14" y2="13"/></svg><span>Backups</span>
+      </button>
+    </nav>
 
-    <div class="subhead">Fonts</div>
+    <div class="cp-content">
+      <section class="cp-pane" class:active={pane === 'style'}>
+        <div class="cp-pane-title">Style</div>
+        <p class="editing">Editing <b>{editingLabel}</b></p>
+
+        <div class="subhead">Fonts</div>
     <label class="field">
       <span>Heading font</span>
       <input list="gfonts" bind:value={fh} on:change={() => onSetFont('heading', fh)} placeholder="Style default" />
@@ -137,8 +165,8 @@
     {/if}
   </section>
 
-  <section>
-    <h3>DICTATION</h3>
+      <section class="cp-pane" class:active={pane === 'dictation'}>
+        <div class="cp-pane-title">Dictation</div>
     <label class="field">
       <span>Engine</span>
       <select bind:value={dictationEngine} on:change={apply}>
@@ -179,16 +207,16 @@
     {/if}
   </section>
 
-  <section>
-    <h3>EDITOR</h3>
+      <section class="cp-pane" class:active={pane === 'editor'}>
+        <div class="cp-pane-title">Editor</div>
     <label class="check">
       <input type="checkbox" bind:checked={spellcheck} on:change={() => onSpellcheck(spellcheck)} /> Check spelling (red underline)
     </label>
     <p class="note">Right-click an underlined word for suggestions and "Add to dictionary".</p>
   </section>
 
-  <section>
-    <h3>CLOUD SYNC</h3>
+      <section class="cp-pane" class:active={pane === 'sync'}>
+        <div class="cp-pane-title">Cloud Sync</div>
     <label class="field">
       <span>Provider</span>
       <select bind:value={syncProvider} on:change={apply}>
@@ -215,29 +243,41 @@
     </div>
   </section>
 
-  <section>
-    <h3>BACKUPS</h3>
+      <section class="cp-pane" class:active={pane === 'backups'}>
+        <div class="cp-pane-title">Backups</div>
     <label class="field">
       <span>Keep last</span>
       <input type="number" min="1" max="100" bind:value={backupsToKeep} on:change={apply} />
     </label>
-  </section>
-
-  <div class="foot"><button class="solid" on:click={() => { apply(); onClose() }}>DONE</button></div>
+    <p class="note">Every save keeps a rolling ring of timestamped backups in a sibling .backups folder next to your document.</p>
+      </section>
+    </div>
+  </div>
 </div>
 
 <style>
   .scrim { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 500; }
   .panel {
     position: fixed; z-index: 501; top: 50%; left: 50%; transform: translate(-50%, -50%);
-    width: min(560px, 92vw); max-height: 88vh; overflow-y: auto;
+    width: min(820px, 95vw); height: min(82vh, 660px);
+    display: flex; flex-direction: column; overflow: hidden;
     background: var(--surface); border: 1px solid var(--rule); border-radius: 16px;
-    padding: 1.5rem 1.7rem; box-shadow: 0 30px 80px rgba(0,0,0,0.55);
+    box-shadow: 0 30px 80px rgba(0,0,0,0.55);
   }
-  h2 { margin: 0 0 1rem; font-family: var(--font-ui); letter-spacing: 0.1em; font-size: 1rem; color: var(--muted); }
-  h3 { margin: 0 0 0.7rem; font-family: var(--font-ui); font-size: 0.72rem; letter-spacing: 0.12em; color: var(--accent); }
-  section { padding: 0.9rem 0; border-top: 1px solid var(--rule); }
-  section:first-of-type { border-top: none; }
+  .cp-header { display: flex; align-items: center; gap: 14px; padding: 1rem 1.2rem; border-bottom: 1px solid var(--rule); flex-shrink: 0; }
+  .cp-title { margin: 0; flex: 1; color: var(--accent); text-transform: uppercase; letter-spacing: 0.15em; font-size: 0.85rem; font-family: var(--font-ui); }
+  .cp-close { width: 32px; height: 32px; flex-shrink: 0; padding: 0; display: flex; align-items: center; justify-content: center; background: transparent; border: 1px solid var(--rule); color: var(--muted); border-radius: 8px; cursor: pointer; }
+  .cp-close:hover { color: var(--accent); border-color: var(--accent); }
+  .cp-body { flex: 1; display: flex; min-height: 0; }
+  .cp-rail { width: 180px; flex-shrink: 0; border-right: 1px solid var(--rule); padding: 0.8rem 0.6rem; display: flex; flex-direction: column; gap: 4px; overflow-y: auto; }
+  .cp-rail-item { display: flex; align-items: center; gap: 9px; width: 100%; text-align: left; padding: 0.6rem 0.75rem; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.04em; background: transparent; border: 1px solid transparent; border-radius: 8px; color: var(--muted); cursor: pointer; font-family: var(--font-ui); transition: background-color 0.15s, color 0.15s; }
+  .cp-rail-item:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--text); }
+  .cp-rail-item.active { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+  .cp-rail-item svg { flex-shrink: 0; }
+  .cp-content { flex: 1; overflow-y: auto; padding: 1.2rem 1.4rem; min-width: 0; }
+  .cp-pane { display: none; flex-direction: column; }
+  .cp-pane.active { display: flex; }
+  .cp-pane-title { margin: 0 0 0.9rem; font-size: 0.72rem; letter-spacing: 0.14em; color: var(--accent); text-transform: uppercase; font-family: var(--font-ui); }
   .field { display: flex; flex-direction: column; gap: 0.3rem; margin-bottom: 0.7rem; }
   .field span { font-size: 0.8rem; color: var(--muted); }
   input, select {
@@ -261,7 +301,6 @@
   .creds { margin-top: 0.5rem; }
   .row { display: flex; align-items: center; gap: 0.9rem; margin-top: 0.5rem; }
   .ok { color: var(--accent); font-size: 0.8rem; letter-spacing: 0.1em; }
-  .foot { display: flex; justify-content: flex-end; margin-top: 1rem; }
   .solid {
     background: var(--accent); color: var(--bg); border: none; cursor: pointer;
     font-family: var(--font-ui); font-weight: 700; letter-spacing: 0.06em; font-size: 0.8rem;
