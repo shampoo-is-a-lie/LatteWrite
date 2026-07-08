@@ -33,6 +33,10 @@
   const setHighlight = (v) => { hlColor = v; if (editor) editor.chain().focus().setTextSelection(sel()).setHighlight({ color: v }).run() }
   const clearHighlight = () => { if (editor) editor.chain().focus().setTextSelection(sel()).unsetHighlight().run() }
 
+  // Reset the selection to the Style's default: strip inline marks, block type
+  // (heading/list/quote → paragraph) and alignment.
+  const clearFormat = () => { if (editor) editor.chain().focus().unsetAllMarks().clearNodes().unsetTextAlign().run() }
+
   $: s = (bump, editor) ? {
     bold: editor?.isActive('bold'),
     italic: editor?.isActive('italic'),
@@ -92,6 +96,8 @@
     <span class="sep"></span>
     <button class:on={s.left} on:click={cmd(c => c.setTextAlign('left'))} title="Align left">&#8676;</button>
     <button class:on={s.center} on:click={cmd(c => c.setTextAlign('center'))} title="Align center">&#8677;</button>
+    <span class="sep"></span>
+    <button on:click={clearFormat} title="Clear formatting — reset selection to the Style default">CLEAR</button>
   </div>
 
   <div class="group right">
