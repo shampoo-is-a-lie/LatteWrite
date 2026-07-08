@@ -20,11 +20,18 @@
   let textColor = '#e06c75'
   let hlColor = '#ffe08a'
 
+  let savedSel = null
+
   const cmd = (fn) => () => { if (editor) fn(editor.chain().focus()).run() }
-  const setTextColor = (v) => { textColor = v; if (editor) editor.chain().focus().setColor(v).run() }
-  const clearTextColor = () => { if (editor) editor.chain().focus().unsetColor().run() }
-  const setHighlight = (v) => { hlColor = v; if (editor) editor.chain().focus().setHighlight({ color: v }).run() }
-  const clearHighlight = () => { if (editor) editor.chain().focus().unsetHighlight().run() }
+
+  // The native colour dialog blurs the editor and collapses its selection, so we
+  // snapshot the selection on mousedown and restore it before applying.
+  const grabSel = () => { if (editor) savedSel = { from: editor.state.selection.from, to: editor.state.selection.to } }
+  const sel = () => savedSel || { from: editor.state.selection.from, to: editor.state.selection.to }
+  const setTextColor = (v) => { textColor = v; if (editor) editor.chain().focus().setTextSelection(sel()).setColor(v).run() }
+  const clearTextColor = () => { if (editor) editor.chain().focus().setTextSelection(sel()).unsetColor().run() }
+  const setHighlight = (v) => { hlColor = v; if (editor) editor.chain().focus().setTextSelection(sel()).setHighlight({ color: v }).run() }
+  const clearHighlight = () => { if (editor) editor.chain().focus().setTextSelection(sel()).unsetHighlight().run() }
 
   $: s = (bump, editor) ? {
     bold: editor?.isActive('bold'),
@@ -66,16 +73,16 @@
     <button class:on={s.underline} on:click={cmd(c => c.toggleUnderline())} title="Underline (Ctrl+U)"><u>U</u></button>
     <button class:on={s.strike} on:click={cmd(c => c.toggleStrike())} title="Strikethrough (Ctrl+Shift+X)"><s>S</s></button>
     <span class="sep"></span>
-    <label class="colorbtn" title="Text color">
+    <label class="colorbtn" title="Text color" on:mousedown={grabSel}>
       <span class="ci" style="border-bottom-color:{textColor}">A</span>
-      <input type="color" value={textColor} on:input={e => setTextColor(e.target.value)} />
+      <input type="color" value={textColor} on:mousedown={grabSel} on:input={e => setTextColor(e.target.value)} />
     </label>
-    <button class="clr" on:click={clearTextColor} title="Clear text color">A&times;</button>
-    <label class="colorbtn" class:on={s.highlight} title="Highlight">
+    <button class="clr" on:mousedown|preventDefault={grabSel} on:click={clearTextColor} title="Clear text color">A&times;</button>
+    <label class="colorbtn" class:on={s.highlight} title="Highlight" on:mousedown={grabSel}>
       <span class="hi" style="background:{hlColor}">H</span>
-      <input type="color" value={hlColor} on:input={e => setHighlight(e.target.value)} />
+      <input type="color" value={hlColor} on:mousedown={grabSel} on:input={e => setHighlight(e.target.value)} />
     </label>
-    <button class="clr" on:click={clearHighlight} title="Clear highlight">H&times;</button>
+    <button class="clr" on:mousedown|preventDefault={grabSel} on:click={clearHighlight} title="Clear highlight">H&times;</button>
     <span class="sep"></span>
     <button class:on={s.h1} on:click={cmd(c => c.toggleHeading({ level: 1 }))} title="Heading 1 (Ctrl+Alt+1)">H1</button>
     <button class:on={s.h2} on:click={cmd(c => c.toggleHeading({ level: 2 }))} title="Heading 2 (Ctrl+Alt+2)">H2</button>

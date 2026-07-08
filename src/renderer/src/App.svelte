@@ -278,6 +278,7 @@
     if (ctrl && k === 's') { e.preventDefault(); saveNow(true) }
     else if (ctrl && e.shiftKey && k === 'p') { e.preventDefault(); toggleFullscreen() }
     else if (ctrl && e.shiftKey && k === 'h') { e.preventDefault(); toggleChrome() }
+    else if (ctrl && e.shiftKey && k === 'x') { e.preventDefault(); editor?.chain().focus().toggleStrike().run() }
     else if (ctrl && k === 'd') { e.preventDefault(); toggleDictate() }
     else if (ctrl && k === 'o') { e.preventDefault(); openDoc() }
     else if (ctrl && k === 'n') { e.preventDefault(); newDoc() }
