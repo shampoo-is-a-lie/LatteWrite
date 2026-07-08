@@ -3,10 +3,13 @@
   export let settings = {}
   export let connected = false
   export let inputs = []
-  export let fontHeading = ''
-  export let fontBody = ''
+  export let headingFamily = ''
+  export let bodyFamily = ''
+  export let isDraft = false
+  export let editingLabel = ''
   export let onPatch = () => {}
   export let onSetFont = () => {}
+  export let onSaveStyle = () => {}
   export let onConnect = () => {}
   export let onDisconnect = () => {}
   export let onClose = () => {}
@@ -19,8 +22,12 @@
   let whisperModel = settings.whisperModel || 'onnx-community/whisper-base.en'
   let audioDeviceId = settings.audioDeviceId || ''
   let backupsToKeep = settings.backupsToKeep ?? 10
-  let fh = fontHeading
-  let fb = fontBody
+  let fh = headingFamily
+  let fb = bodyFamily
+  let newStyleName = ''
+  // Reflect the live style/draft fonts (e.g. after a fork) back into the inputs.
+  $: fh = headingFamily
+  $: fb = bodyFamily
 
   function apply() {
     onPatch({ oauthClientId: clientId, oauthClientSecret: clientSecret, syncProvider, syncOnSave, dictationEngine, whisperModel, audioDeviceId, backupsToKeep: Number(backupsToKeep) })
@@ -71,18 +78,27 @@
 
   <section>
     <h3>FONTS</h3>
+    <p class="editing">Editing <b>{editingLabel}</b></p>
     <label class="field">
       <span>Heading font</span>
-      <input list="gfonts" bind:value={fh} on:change={() => onSetFont('heading', fh.trim())} placeholder="Style default" />
+      <input list="gfonts" bind:value={fh} on:change={() => onSetFont('heading', fh)} placeholder="Style default" />
     </label>
     <label class="field">
       <span>Body font</span>
-      <input list="gfonts" bind:value={fb} on:change={() => onSetFont('body', fb.trim())} placeholder="Style default" />
+      <input list="gfonts" bind:value={fb} on:change={() => onSetFont('body', fb)} placeholder="Style default" />
     </label>
     <datalist id="gfonts">
       {#each GOOGLE_FONTS as f}<option value={f}></option>{/each}
     </datalist>
-    <p class="note">Any Google font — start typing to search, or paste any family name. Downloaded once and cached for offline use. Clear the field to use the Style's own font.</p>
+    {#if isDraft}
+      <div class="row">
+        <input bind:value={newStyleName} placeholder="Name your style" on:keydown={(e) => e.key === 'Enter' && onSaveStyle(newStyleName)} />
+        <button class="solid" on:click={() => onSaveStyle(newStyleName)}>SAVE STYLE</button>
+      </div>
+      <p class="note">Built-in styles are immutable, so this is an unsaved copy. Name and save it to keep it in your Style menu.</p>
+    {:else}
+      <p class="note">Any Google font — type to search or paste a family name (cached offline). Changing a built-in style's font creates a saveable copy; custom styles are edited in place. Clear a field to use the base font.</p>
+    {/if}
   </section>
 
   <section>
@@ -186,6 +202,8 @@
   }
   .check { display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem; color: var(--text); margin-bottom: 0.7rem; }
   .note { font-size: 0.75rem; color: var(--muted); margin: 0.2rem 0 0; line-height: 1.4; }
+  .editing { font-size: 0.8rem; color: var(--muted); margin: 0 0 0.7rem; }
+  .editing b { color: var(--accent); }
   .meter { flex: 1; height: 10px; background: var(--bg); border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; }
   .meter-fill { height: 100%; background: var(--accent); transition: width 0.06s linear; }
   .creds { margin-top: 0.5rem; }

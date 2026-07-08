@@ -1,19 +1,32 @@
-// Loads a Google font at runtime (via the main process, which caches it) and
-// points the given CSS variable at it. kind is 'heading' or 'body'.
+// Font helpers. Built-in styles use bundled families (loaded at startup); any
+// other family is a Google font, fetched+cached by the main process and injected
+// as an @font-face <style> on demand.
 
-function fallback(family) {
-  if (/serif|slab|garamond|caslon|baskerville/i.test(family)) return 'serif'
-  if (/mono|code/i.test(family)) return 'monospace'
+const BUNDLED = new Set(['Inter', 'Space Grotesk', 'Lora', 'Source Serif 4', 'Raleway', 'JetBrains Mono'])
+
+const SERIF = /serif|slab|lora|garamond|caslon|baskerville|playfair|spectral|newsreader|fraunces|cormorant|bitter|domine|vollkorn|arvo|cardo|neuton|gelasio|marcellus|cinzel|petrona|piazzolla|literata|merriweather|bodoni|alegreya|crimson|noto serif|pt serif|source serif|ibm plex serif|dm serif|libre|frank ruhl|philosopher/i
+const MONO = /mono|code|consol/i
+
+export function fallback(family) {
+  if (MONO.test(family)) return 'monospace'
+  if (SERIF.test(family)) return 'serif'
   return 'sans-serif'
 }
 
-export async function applyFont(kind, family) {
-  if (!family) return
+export function fontStack(family) {
+  return `'${family}', ${fallback(family)}`
+}
+
+export function isBundled(family) {
+  return BUNDLED.has(family)
+}
+
+// Ensure a family's @font-face is present in the document (no-op for bundled).
+export async function ensureFontLoaded(family) {
+  if (!family || BUNDLED.has(family)) return
   const css = await window.api.fonts.load(family)
   const id = 'gf-' + family.replace(/[^a-z0-9]+/gi, '-').toLowerCase()
   let el = document.getElementById(id)
   if (!el) { el = document.createElement('style'); el.id = id; document.head.appendChild(el) }
   el.textContent = css
-  const varName = kind === 'heading' ? '--font-heading' : '--font-body'
-  document.documentElement.style.setProperty(varName, `'${family}', ${fallback(family)}`)
 }

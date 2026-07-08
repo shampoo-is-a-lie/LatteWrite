@@ -1,7 +1,7 @@
-import { STYLES } from './styles.js'
+import { fontStack } from './fonts.js'
 
-export function applyStyle(name, fontScale = 1) {
-  const style = STYLES[name] || STYLES.Espresso
+// Applies a resolved style OBJECT (built-in or custom) as CSS variables.
+export function applyStyle(style, fontScale = 1) {
   const root = document.documentElement
   const t = style.tokens
 
@@ -14,12 +14,11 @@ export function applyStyle(name, fontScale = 1) {
   root.style.setProperty('--caret', t.caret)
   root.style.setProperty('--rule', t.rule)
 
-  root.style.setProperty('--font-heading', style.fonts.heading)
-  root.style.setProperty('--font-body', style.fonts.body)
-  root.style.setProperty('--font-ui', style.fonts.ui)
+  root.style.setProperty('--font-heading', fontStack(style.fonts.heading))
+  root.style.setProperty('--font-body', fontStack(style.fonts.body))
+  root.style.setProperty('--font-ui', fontStack(style.fonts.ui))
   root.style.setProperty('--measure', style.measure)
   root.style.setProperty('--font-scale', String(style.scale * fontScale))
 
   root.setAttribute('data-dark', style.dark ? 'true' : 'false')
-  return style
 }

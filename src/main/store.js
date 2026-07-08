@@ -15,10 +15,9 @@ const store = new Store({
     oauthToken: null,
 
     // Appearance
-    style: 'Espresso',
+    style: 'Espresso',        // built-in name or a custom style name
     fontScale: 1,
-    fontHeading: '', // Google font override; '' = use the Style's font
-    fontBody: '',
+    customStyles: {},          // user-saved styles: { name: styleObject }
 
     // Editing
     currentFile: '',

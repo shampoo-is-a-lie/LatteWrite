@@ -1,17 +1,13 @@
-// A Style is a full look: color tokens + a Google-Fonts heading/body pairing +
-// reading measure + caret personality. The theming engine applies it as CSS
-// variables, so any Style can be forked into a custom one later.
-
-const RALEWAY = "'Raleway', sans-serif"
-const INTER = "'Inter', sans-serif"
-const GROTESK = "'Space Grotesk', sans-serif"
-const LORA = "'Lora', serif"
-const SOURCE_SERIF = "'Source Serif 4', Georgia, serif"
+// A Style is a full look: color tokens + a heading/body/ui font pairing (family
+// names) + reading measure + caret personality. Built-ins are IMMUTABLE — the
+// app never mutates these; changing a font forks a custom copy instead.
+// Fonts are family names; the theme engine builds the CSS stack and loads any
+// non-bundled (Google) family on demand.
 
 export const STYLES = {
   Espresso: {
     dark: true,
-    fonts: { heading: RALEWAY, body: SOURCE_SERIF, ui: RALEWAY },
+    fonts: { heading: 'Raleway', body: 'Source Serif 4', ui: 'Raleway' },
     measure: '46rem', scale: 1,
     tokens: {
       bg: '#17100a', surface: '#21160d', text: '#efe3d2', muted: '#b89b7d',
@@ -20,7 +16,7 @@ export const STYLES = {
   },
   Ink: {
     dark: true,
-    fonts: { heading: GROTESK, body: INTER, ui: INTER },
+    fonts: { heading: 'Space Grotesk', body: 'Inter', ui: 'Inter' },
     measure: '44rem', scale: 1,
     tokens: {
       bg: '#0b0b0d', surface: '#141417', text: '#f4f4f6', muted: '#9a9aa2',
@@ -29,7 +25,7 @@ export const STYLES = {
   },
   Manuscript: {
     dark: false,
-    fonts: { heading: LORA, body: SOURCE_SERIF, ui: INTER },
+    fonts: { heading: 'Lora', body: 'Source Serif 4', ui: 'Inter' },
     measure: '42rem', scale: 1,
     tokens: {
       bg: '#f5efe4', surface: '#fbf7ef', text: '#2a241c', muted: '#7c7263',
@@ -38,7 +34,7 @@ export const STYLES = {
   },
   Lecture: {
     dark: true,
-    fonts: { heading: GROTESK, body: INTER, ui: INTER },
+    fonts: { heading: 'Space Grotesk', body: 'Inter', ui: 'Inter' },
     measure: '52rem', scale: 1.15,
     tokens: {
       bg: '#0e131a', surface: '#141b25', text: '#eaf1f8', muted: '#93a4b8',
@@ -47,7 +43,7 @@ export const STYLES = {
   },
   Paper: {
     dark: false,
-    fonts: { heading: LORA, body: SOURCE_SERIF, ui: INTER },
+    fonts: { heading: 'Lora', body: 'Source Serif 4', ui: 'Inter' },
     measure: '46rem', scale: 1,
     tokens: {
       bg: '#ffffff', surface: '#ffffff', text: '#1a1a1a', muted: '#6a6a6a',
@@ -57,3 +53,18 @@ export const STYLES = {
 }
 
 export const STYLE_NAMES = Object.keys(STYLES)
+
+export function isBuiltin(name) {
+  return Object.prototype.hasOwnProperty.call(STYLES, name)
+}
+
+// Deep clone a style so a custom copy never shares references with a built-in.
+export function cloneStyle(style) {
+  return {
+    dark: style.dark,
+    fonts: { ...style.fonts },
+    measure: style.measure,
+    scale: style.scale,
+    tokens: { ...style.tokens }
+  }
+}
