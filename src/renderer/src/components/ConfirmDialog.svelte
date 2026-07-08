@@ -17,7 +17,7 @@
   <h2>{title}</h2>
   <p>{message}</p>
   <div class="actions">
-    <button class="ghost" on:click={onCancel}>{cancelLabel}</button>
+    {#if cancelLabel}<button class="ghost" on:click={onCancel}>{cancelLabel}</button>{/if}
     <button class="solid" class:danger on:click={onConfirm}>{confirmLabel}</button>
   </div>
 </div>

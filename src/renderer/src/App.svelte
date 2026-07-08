@@ -6,6 +6,7 @@
   import StylePicker from './components/StylePicker.svelte'
   import Settings from './components/Settings.svelte'
   import ContextMenu from './components/ContextMenu.svelte'
+  import ConfirmDialog from './components/ConfirmDialog.svelte'
   import { applyStyle } from './theme.js'
   import { STYLES, isBuiltin, cloneStyle } from './styles.js'
   import { fontStack, ensureFontLoaded } from './fonts.js'
@@ -42,6 +43,14 @@
   let showSettings = false
   let connected = false
   let maximized = false
+  let dialog = null  // themed alert/confirm
+
+  function showAlert(title, message) {
+    dialog = { title, message, confirmLabel: 'OK', cancelLabel: '', danger: false, onConfirm: () => dialog = null }
+  }
+  function showConfirm({ title, message, confirmLabel, danger, onConfirm }) {
+    dialog = { title, message, confirmLabel, cancelLabel: 'CANCEL', danger, onConfirm: () => { dialog = null; onConfirm() } }
+  }
 
   // Presentation modes
   let typewriter = false
@@ -252,7 +261,7 @@
   function saveStyle(name) {
     name = (name || '').trim()
     if (!name || !draft) return
-    if (isBuiltin(name)) { alert('That name belongs to a built-in style. Pick another.'); return }
+    if (isBuiltin(name)) { showAlert('Style', 'That name belongs to a built-in style. Pick another.'); return }
     const obj = cloneStyle(draft)
     obj.base = draft.base
     customStyles = { ...customStyles, [name]: obj }
@@ -261,6 +270,15 @@
     draftBase = ''
     window.api.settings.set({ customStyles, style })
     applyCurrent()
+  }
+
+  function requestDeleteCustom(name) {
+    showConfirm({
+      title: 'Delete style',
+      message: `Delete the custom style "${name}"? This can't be undone.`,
+      confirmLabel: 'DELETE', danger: true,
+      onConfirm: () => deleteCustom(name)
+    })
   }
 
   function deleteCustom(name) {
@@ -295,7 +313,7 @@
   function renameStyle(oldName, newName) {
     newName = (newName || '').trim()
     if (!newName || !customStyles[oldName] || newName === oldName) return
-    if (STYLES[newName] || customStyles[newName]) { alert('A style with that name already exists.'); return }
+    if (STYLES[newName] || customStyles[newName]) { showAlert('Style', 'A style with that name already exists.'); return }
     const next = { ...customStyles }
     next[newName] = next[oldName]
     delete next[oldName]
@@ -383,7 +401,7 @@
       dictating = true; dictAnchor = null; dictLen = 0
       dictationCtl = createDictation(settings.dictationEngine || 'whisper', { deviceId: settings.audioDeviceId, model: settings.whisperModel })
       await dictationCtl.start(dictInterim, dictCommit, (s) => { dictLabel = s })
-    } catch (e) { dictating = false; dictLabel = ''; alert(e.message) }
+    } catch (e) { dictating = false; dictLabel = ''; showAlert('Dictation', e.message) }
   }
 
   async function enumerateAudioInputs() {
@@ -399,7 +417,7 @@
   async function patchSettings(patch) { settings = await window.api.settings.set(patch) }
   async function connectDrive() {
     try { await window.api.auth.start(); connected = await window.api.auth.status() }
-    catch (e) { alert('Could not connect: ' + e.message) }
+    catch (e) { showAlert('Cloud sync', 'Could not connect: ' + e.message) }
   }
   async function disconnectDrive() { await window.api.auth.signOut(); connected = false }
   function openSettings() { enumerateAudioInputs(); showSettings = true }
@@ -465,7 +483,7 @@
 
   {#if showStyles}
     <StylePicker current={style} {stylesMap} order={styleOrder} {customSet}
-      onPick={pickStyle} onDelete={deleteCustom} onDuplicate={duplicateStyle}
+      onPick={pickStyle} onDelete={requestDeleteCustom} onDuplicate={duplicateStyle}
       onRename={renameStyle} onClose={() => showStyles = false} />
   {/if}
   {#if showSettings}
@@ -479,4 +497,10 @@
   {/if}
 
   <ContextMenu />
+
+  {#if dialog}
+    <ConfirmDialog title={dialog.title} message={dialog.message}
+      confirmLabel={dialog.confirmLabel} cancelLabel={dialog.cancelLabel} danger={dialog.danger}
+      onConfirm={dialog.onConfirm} onCancel={() => dialog = null} />
+  {/if}
 </div>
