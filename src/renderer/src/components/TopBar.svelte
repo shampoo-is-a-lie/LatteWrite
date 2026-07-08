@@ -19,8 +19,12 @@
   export let onMinimize = () => {}
   export let onMaximize = () => {}
   export let onClose = () => {}
+  export let onRename = () => {}
 
   let showFile = false
+  let titleVal = title
+  let editingTitle = false
+  $: if (!editingTitle) titleVal = title
   let textColor = '#e06c75'
   let hlColor = '#ffe08a'
   let savedSel = null
@@ -99,7 +103,11 @@
       <button class="zval" on:click={onZoomReset} title="Reset zoom (Ctrl 0)">{Math.round(zoom * 100)}%</button>
       <button on:click={onZoomIn} title="Zoom in (Ctrl +)">+</button>
     </div>
-    <span class="title">{title}{dirty ? ' *' : ''}</span>
+    <input class="title-input" bind:value={titleVal} spellcheck="false" title="Rename document"
+      on:focus={() => editingTitle = true}
+      on:blur={() => { editingTitle = false; onRename(titleVal) }}
+      on:keydown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); else if (e.key === 'Escape') { titleVal = title; e.currentTarget.blur() } }} />
+    {#if dirty}<span class="dirty" title="Unsaved changes">*</span>{/if}
     <button on:click={onStyles}>STYLE</button>
     <button on:click={onSettings}>SETTINGS</button>
     <button class="present" on:click={onPresent}>PRESENT</button>
@@ -142,7 +150,14 @@
   button.on { color: var(--accent); background: color-mix(in srgb, var(--accent) 20%, transparent); }
   button.present { background: var(--accent); color: var(--bg); font-weight: 700; }
   .sep { width: 1px; height: 20px; background: var(--rule); margin: 0 0.35rem; }
-  .title { color: var(--muted); font-size: 0.8rem; margin-right: 0.4rem; max-width: 13rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .title-input {
+    background: transparent; border: 1px solid transparent; color: var(--muted);
+    font-family: var(--font-ui); font-size: 0.8rem; padding: 0.25rem 0.45rem; border-radius: 6px;
+    max-width: 14rem; min-width: 5rem; text-overflow: ellipsis;
+  }
+  .title-input:hover { border-color: var(--rule); }
+  .title-input:focus { outline: none; border-color: var(--accent); color: var(--text); background: var(--bg); }
+  .dirty { color: var(--accent); font-size: 0.9rem; margin: 0 0.3rem 0 -0.15rem; }
 
   .colorbtn { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 2rem; height: 1.85rem; border-radius: 7px; cursor: pointer; }
   .colorbtn:hover { background: color-mix(in srgb, var(--accent) 16%, transparent); }

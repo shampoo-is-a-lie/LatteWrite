@@ -17,6 +17,7 @@
 
   let filePath = ''
   let title = 'Untitled'
+  let titleManual = false  // true once the user renames the doc explicitly
   let fontScale = 1
 
   // Style state: `style` is the selected name (built-in or custom). `draft` is an
@@ -67,14 +68,28 @@
 
   function buildMeta() {
     const obj = resolveCurrent()
-    return { title, style, fontScale, bodyFont: fontStack(obj.fonts.body), headingFont: fontStack(obj.fonts.heading), updatedAt: Date.now() }
+    return { title, titleManual, style, fontScale, bodyFont: fontStack(obj.fonts.body), headingFont: fontStack(obj.fonts.heading), updatedAt: Date.now() }
   }
 
+  // Auto-derive the name from the first line — unless the user has set it explicitly.
   function computeTitle() {
-    if (!editor) return
+    if (!editor || titleManual) return
     const line = editor.getText().split('\n').find(l => l.trim())
     const fromFile = filePath ? filePath.split('/').pop().replace(/\.latte$/, '') : ''
     title = (line || fromFile || 'Untitled').trim().slice(0, 80)
+  }
+
+  // User renamed the document in the top bar → fix the title and rename the file.
+  async function commitTitle(name) {
+    name = (name || '').trim()
+    if (!name || name === title) return
+    title = name
+    titleManual = true
+    if (filePath) {
+      const res = await window.api.doc.rename({ filePath, name })
+      if (res) filePath = res.filePath
+      saveNow(false)
+    }
   }
 
   function onReady(ed) { editor = ed; computeTitle(); updatePresentation() }
@@ -153,7 +168,9 @@
     fontScale = meta.fontScale || 1
     applyCurrent()
     dirty = false
-    computeTitle()
+    titleManual = !!meta.titleManual
+    if (titleManual && meta.title) title = meta.title
+    else computeTitle()
   }
 
   function newDoc() {
@@ -162,6 +179,7 @@
     editor.commands.focus()
     filePath = ''
     dirty = false
+    titleManual = false
     computeTitle()
   }
 
@@ -247,6 +265,38 @@
     customStyles = next
     window.api.settings.set({ customStyles })
     if (style === name) pickStyle('Espresso')
+  }
+
+  function uniqueStyleName(base) {
+    let n = base, i = 2
+    while (STYLES[n] || customStyles[n]) n = `${base} ${i++}`
+    return n
+  }
+
+  // Duplicate any style (built-in or custom) into a new editable custom style.
+  function duplicateStyle(name) {
+    const src = customStyles[name] || STYLES[name]
+    if (!src) return
+    const obj = cloneStyle(src)
+    obj.base = src.base || (isBuiltin(name) ? name : 'Espresso')
+    const newName = uniqueStyleName(`${name} copy`)
+    customStyles = { ...customStyles, [newName]: obj }
+    style = newName
+    draft = null; draftBase = ''
+    window.api.settings.set({ customStyles, style })
+    applyCurrent()
+  }
+
+  function renameStyle(oldName, newName) {
+    newName = (newName || '').trim()
+    if (!newName || !customStyles[oldName] || newName === oldName) return
+    if (STYLES[newName] || customStyles[newName]) { alert('A style with that name already exists.'); return }
+    const next = { ...customStyles }
+    next[newName] = next[oldName]
+    delete next[oldName]
+    customStyles = next
+    if (style === oldName) style = newName
+    window.api.settings.set({ customStyles, style })
   }
 
   // ── Zoom (editor text only) ─────────────────────────────────────────────────
@@ -394,7 +444,7 @@
       onExport={exportAs} onStyles={() => showStyles = true}
       onSettings={openSettings} onPresent={toggleFullscreen}
       onZoomIn={() => zoomBy(0.1)} onZoomOut={() => zoomBy(-0.1)} onZoomReset={zoomReset}
-      onMinimize={winMin} onMaximize={winMax} onClose={winClose} />
+      onMinimize={winMin} onMaximize={winMax} onClose={winClose} onRename={commitTitle} />
   {/if}
 
   <div class="editor-scroll" class:typewriter bind:this={scroller}>
@@ -410,7 +460,8 @@
 
   {#if showStyles}
     <StylePicker current={style} {stylesMap} order={styleOrder} {customSet}
-      onPick={pickStyle} onDelete={deleteCustom} onClose={() => showStyles = false} />
+      onPick={pickStyle} onDelete={deleteCustom} onDuplicate={duplicateStyle}
+      onRename={renameStyle} onClose={() => showStyles = false} />
   {/if}
   {#if showSettings}
     <Settings {settings} {connected} inputs={audioInputs}

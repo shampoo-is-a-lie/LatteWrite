@@ -1,5 +1,5 @@
 import { app, shell, BrowserWindow, ipcMain, dialog, session } from 'electron'
-import { join } from 'path'
+import { join, dirname } from 'path'
 import fs from 'fs'
 import store from './store.js'
 import { startAuthFlow, signOut, isAuthenticated } from './auth.js'
@@ -22,9 +22,12 @@ app.commandLine.appendSwitch('ignore-gpu-blocklist')
 let mainWindow = null
 
 function createWindow() {
+  const b = store.get('windowBounds') || {}
   mainWindow = new BrowserWindow({
-    width: 1200,
-    height: 820,
+    width: b.width || 1200,
+    height: b.height || 820,
+    x: b.x,
+    y: b.y,
     minWidth: 640,
     minHeight: 480,
     backgroundColor: '#17100a',
@@ -35,6 +38,11 @@ function createWindow() {
       contextIsolation: true,
       sandbox: false
     }
+  })
+  if (b.maximized) mainWindow.maximize()
+
+  mainWindow.on('close', () => {
+    store.set('windowBounds', { ...mainWindow.getNormalBounds(), maximized: mainWindow.isMaximized() })
   })
 
   const ses = mainWindow.webContents.session
@@ -135,6 +143,17 @@ ipcMain.handle('doc:saveAs', async (_e, { doc, meta }) => {
 })
 
 ipcMain.handle('doc:recent', () => store.get('recentFiles').filter(f => fs.existsSync(f)))
+
+ipcMain.handle('doc:rename', (_e, { filePath, name }) => {
+  const clean = (name || '').replace(/[\/\\:*?"<>|]/g, '_').trim() || 'Untitled'
+  let target = join(dirname(filePath), clean + '.latte')
+  if (target === filePath) return { filePath }
+  if (fs.existsSync(target)) target = join(dirname(filePath), `${clean}_${Date.now()}.latte`)
+  fs.renameSync(filePath, target)
+  store.set('recentFiles', store.get('recentFiles').map(f => f === filePath ? target : f))
+  store.set('currentFile', target)
+  return { filePath: target }
+})
 
 // ── Sync ──────────────────────────────────────────────────────────────────────
 async function syncCurrent(filePath) {

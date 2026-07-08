@@ -26,6 +26,9 @@ const store = new Store({
     backupsToKeep: 10,
     spellcheck: true,
 
+    // Window
+    windowBounds: null, // { x, y, width, height, maximized }
+
     // Presentation modes
     typewriter: false,   // keep the caret vertically centered
     focusMode: false,    // dim every paragraph but the caret's
