@@ -40,7 +40,16 @@
   let showSettings = false
   let connected = false
 
+  // Presentation modes
+  let typewriter = false
+  let focusMode = false
+  let revealMode = false
+  let revealCount = 1
+  let scroller = null
+
   let autosaveTimer = null
+
+  $: revealTotal = (bump, editor) ? (editor?.view?.dom?.children?.length || 0) : 0
 
   $: curObj = draft || customStyles[style] || STYLES[style] || STYLES.Espresso
   $: stylesMap = { ...STYLES, ...customStyles }
@@ -66,9 +75,71 @@
     title = (line || fromFile || 'Untitled').trim().slice(0, 80)
   }
 
-  function onReady(ed) { editor = ed; computeTitle() }
-  function onChange() { bump++; dirty = true; computeTitle(); scheduleAutosave() }
-  function onSelect() { bump++ }
+  function onReady(ed) { editor = ed; computeTitle(); updatePresentation() }
+  function onChange() { bump++; dirty = true; computeTitle(); scheduleAutosave(); updatePresentation() }
+  function onSelect() { bump++; updatePresentation() }
+
+  // ── Presentation modes ──────────────────────────────────────────────────────
+  function currentBlockEl() {
+    const { view, state } = editor
+    let dom = view.domAtPos(state.selection.head).node
+    if (dom.nodeType === 3) dom = dom.parentElement
+    while (dom && dom.parentElement && dom.parentElement !== view.dom) dom = dom.parentElement
+    return (dom && dom.parentElement === view.dom) ? dom : null
+  }
+
+  function currentBlockIndex() {
+    const el = currentBlockEl()
+    return el ? [...editor.view.dom.children].indexOf(el) : 0
+  }
+
+  function scrollCaretToCenter() {
+    if (!editor || !scroller) return
+    let coords
+    try { coords = editor.view.coordsAtPos(editor.state.selection.head) } catch { return }
+    const rect = scroller.getBoundingClientRect()
+    const caretY = coords.top - rect.top + scroller.scrollTop
+    scroller.scrollTo({ top: Math.max(0, caretY - scroller.clientHeight / 2), behavior: 'smooth' })
+  }
+
+  function scrollToBlock(i) {
+    if (!editor || !scroller) return
+    const el = editor.view.dom.children[i]
+    if (!el) return
+    const rect = scroller.getBoundingClientRect()
+    const y = el.getBoundingClientRect().top - rect.top + scroller.scrollTop
+    scroller.scrollTo({ top: Math.max(0, y - scroller.clientHeight / 2 + el.offsetHeight / 2), behavior: 'smooth' })
+  }
+
+  function updatePresentation() {
+    if (!editor) return
+    requestAnimationFrame(() => {
+      if (!editor) return
+      const cur = focusMode ? currentBlockEl() : null
+      let i = 0
+      for (const el of editor.view.dom.children) {
+        el.classList.toggle('focus-line', focusMode && el === cur)
+        el.classList.toggle('reveal-hidden', revealMode && i >= revealCount)
+        i++
+      }
+      if (typewriter) scrollCaretToCenter()
+    })
+  }
+
+  function toggleTypewriter() { typewriter = !typewriter; window.api.settings.set({ typewriter }); updatePresentation() }
+  function toggleFocus() { focusMode = !focusMode; window.api.settings.set({ focusMode }); updatePresentation() }
+  function toggleReveal() {
+    revealMode = !revealMode
+    if (revealMode) revealCount = Math.max(1, currentBlockIndex() + 1)
+    window.api.settings.set({ revealMode })
+    updatePresentation()
+  }
+  function revealNext() {
+    revealCount = Math.min(editor?.view.dom.children.length || 1, revealCount + 1)
+    updatePresentation()
+    scrollToBlock(revealCount - 1)
+  }
+  function revealPrev() { revealCount = Math.max(1, revealCount - 1); updatePresentation() }
 
   function scheduleAutosave() {
     if (!filePath) return
@@ -285,6 +356,8 @@
     else if (ctrl && (k === '=' || k === '+')) { e.preventDefault(); zoomBy(0.1) }
     else if (ctrl && k === '-') { e.preventDefault(); zoomBy(-0.1) }
     else if (ctrl && k === '0') { e.preventDefault(); zoomReset() }
+    else if (revealMode && e.key === 'PageDown') { e.preventDefault(); revealNext() }
+    else if (revealMode && e.key === 'PageUp') { e.preventDefault(); revealPrev() }
     else if (e.key === 'Escape') { showStyles = false; showSettings = false }
   }
 
@@ -294,6 +367,9 @@
     style = settings.style || 'Espresso'
     if (!STYLES[style] && !customStyles[style]) style = 'Espresso'
     fontScale = settings.fontScale || 1
+    typewriter = !!settings.typewriter
+    focusMode = !!settings.focusMode
+    revealMode = !!settings.revealMode
     applyCurrent()
     connected = await window.api.auth.status()
     window.api.window.onFullscreen(v => { fullscreen = v; chromeHidden = v })
@@ -311,13 +387,16 @@
       onZoomIn={() => zoomBy(0.1)} onZoomOut={() => zoomBy(-0.1)} onZoomReset={zoomReset} />
   {/if}
 
-  <div class="editor-scroll">
+  <div class="editor-scroll" class:typewriter class:focus-mode={focusMode} class:reveal-mode={revealMode} bind:this={scroller}>
     <Editor {onReady} {onChange} {onSelect} />
   </div>
 
   <PresentationBar
     {dictating} {dictLabel} {fullscreen} {chromeHidden} {saving} {micAvailable}
-    onDictate={toggleDictate} onPresent={toggleFullscreen} onToggleChrome={toggleChrome} />
+    {typewriter} {focusMode} {revealMode} {revealCount} {revealTotal}
+    onDictate={toggleDictate} onPresent={toggleFullscreen} onToggleChrome={toggleChrome}
+    onToggleTypewriter={toggleTypewriter} onToggleFocus={toggleFocus} onToggleReveal={toggleReveal}
+    onRevealNext={revealNext} onRevealPrev={revealPrev} />
 
   {#if showStyles}
     <StylePicker current={style} {stylesMap} order={styleOrder} {customSet}

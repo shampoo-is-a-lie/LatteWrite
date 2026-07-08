@@ -26,6 +26,11 @@ const store = new Store({
     backupsToKeep: 10,
     spellcheck: true,
 
+    // Presentation modes
+    typewriter: false,   // keep the caret vertically centered
+    focusMode: false,    // dim every paragraph but the caret's
+    revealMode: false,   // teleprompter: reveal blocks one at a time
+
     // Dictation: 'webspeech' (online, free) or 'whisper' (offline, local)
     dictationEngine: 'whisper',
     whisperModel: 'onnx-community/whisper-base.en',

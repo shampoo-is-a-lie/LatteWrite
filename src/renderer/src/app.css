@@ -90,6 +90,13 @@ body {
 /* Interim dictation text, before it's committed */
 .dictation-interim { color: var(--muted); opacity: 0.75; }
 
-/* ── Presentation mode: hide everything but the discreet controls ───────────── */
-.app-shell.presentation .topbar { opacity: 0; pointer-events: none; }
-.app-shell.presentation .editor-page { padding-top: 12vh; }
+/* ── Presentation modes ─────────────────────────────────────────────────────── */
+/* Typewriter: extra padding lets the caret sit at the vertical centre. */
+.editor-scroll.typewriter .editor-page { padding-top: 45vh; padding-bottom: 45vh; }
+
+/* Focus: dim every top-level block except the caret's. */
+.editor-scroll.focus-mode .ProseMirror > * { opacity: 0.28; transition: opacity 0.3s ease; }
+.editor-scroll.focus-mode .ProseMirror > .focus-line { opacity: 1; }
+
+/* Teleprompter reveal: blocks past the frontier are hidden. */
+.editor-scroll.reveal-mode .ProseMirror > .reveal-hidden { opacity: 0; transition: opacity 0.4s ease; }
