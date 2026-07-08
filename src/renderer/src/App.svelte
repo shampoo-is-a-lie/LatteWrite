@@ -80,11 +80,23 @@
   function onSelect() { bump++; updatePresentation() }
 
   // ── Presentation modes ──────────────────────────────────────────────────────
-  // Index of the top-level block containing the caret. Maps 1:1 to the editor's
-  // direct child elements (same order as the document's top-level nodes).
+  // Work off the actual rendered editor DOM and the live browser selection, so
+  // presentation styling never depends on an editor-instance reference.
+  function visiblePM() { return document.querySelector('.editor-scroll .ProseMirror') }
+
+  function currentBlockEl() {
+    const pm = visiblePM()
+    if (!pm) return null
+    const s = window.getSelection()
+    let n = s && s.anchorNode
+    if (n && n.nodeType === 3) n = n.parentNode
+    while (n && n.parentNode && n.parentNode !== pm) n = n.parentNode
+    return (n && n.parentNode === pm) ? n : null
+  }
+
   function currentBlockIndex() {
-    if (!editor) return 0
-    return editor.state.selection.$head.index(0)
+    const pm = visiblePM(), el = currentBlockEl()
+    return (pm && el) ? [...pm.children].indexOf(el) : 0
   }
 
   function scrollCaretToCenter() {
@@ -97,8 +109,9 @@
   }
 
   function scrollToBlock(i) {
-    if (!editor || !scroller) return
-    const el = editor.view.dom.children[i]
+    const pm = visiblePM()
+    if (!pm || !scroller) return
+    const el = pm.children[i]
     if (!el) return
     const rect = scroller.getBoundingClientRect()
     const y = el.getBoundingClientRect().top - rect.top + scroller.scrollTop
@@ -109,14 +122,15 @@
   // matching to go wrong. Focus dims all but the caret's block; reveal hides
   // everything past the frontier.
   function updatePresentation() {
-    if (!editor) return
-    const kids = editor.view.dom.children
-    const curIdx = focusMode ? currentBlockIndex() : -1
+    const pm = visiblePM()
+    if (!pm) return
+    const kids = pm.children
+    const curEl = focusMode ? currentBlockEl() : null
     for (let i = 0; i < kids.length; i++) {
       const el = kids[i]
       let op = ''
       if (revealMode && i >= revealCount) op = '0'
-      else if (focusMode && i !== curIdx) op = '0.28'
+      else if (focusMode && el !== curEl) op = '0.28'
       el.style.opacity = op
       el.style.transition = 'opacity 0.3s ease'
       el.style.pointerEvents = (revealMode && i >= revealCount) ? 'none' : ''
@@ -125,7 +139,12 @@
   }
 
   function toggleTypewriter() { typewriter = !typewriter; window.api.settings.set({ typewriter }); updatePresentation() }
-  function toggleFocus() { focusMode = !focusMode; window.api.settings.set({ focusMode }); updatePresentation() }
+  function toggleFocus() {
+    focusMode = !focusMode
+    window.api.settings.set({ focusMode })
+    if (focusMode) editor?.commands.focus() // restore caret so the current block is detectable
+    updatePresentation()
+  }
   function toggleReveal() {
     revealMode = !revealMode
     if (revealMode) revealCount = Math.max(1, currentBlockIndex() + 1)
