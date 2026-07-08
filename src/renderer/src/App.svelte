@@ -5,6 +5,7 @@
   import PresentationBar from './components/PresentationBar.svelte'
   import StylePicker from './components/StylePicker.svelte'
   import Settings from './components/Settings.svelte'
+  import ContextMenu from './components/ContextMenu.svelte'
   import { applyStyle } from './theme.js'
   import { STYLES, isBuiltin, cloneStyle } from './styles.js'
   import { fontStack, ensureFontLoaded } from './fonts.js'
@@ -39,6 +40,7 @@
   let showStyles = false
   let showSettings = false
   let connected = false
+  let maximized = false
 
   // Presentation modes
   let typewriter = false
@@ -280,6 +282,9 @@
   // ── Presentation ────────────────────────────────────────────────────────────
   async function toggleFullscreen() { fullscreen = await window.api.window.togglePresentation() }
   function toggleChrome() { chromeHidden = !chromeHidden }
+  const winMin = () => window.api.window.minimize()
+  const winMax = () => window.api.window.maximize()
+  const winClose = () => window.api.window.close()
 
   // ── Dictation ────────────────────────────────────────────────────────────────
   function clampPos(p) { return Math.max(0, Math.min(p, editor.state.doc.content.size)) }
@@ -374,7 +379,9 @@
     revealMode = !!settings.revealMode
     applyCurrent()
     connected = await window.api.auth.status()
+    maximized = await window.api.window.isMaximized()
     window.api.window.onFullscreen(v => { fullscreen = v; chromeHidden = v })
+    window.api.window.onMaximized(v => { maximized = v })
     window.addEventListener('keydown', onKey)
   })
 </script>
@@ -382,11 +389,12 @@
 <div class="app-shell">
   {#if !chromeHidden}
     <TopBar
-      {editor} {bump} {title} {saving} {dirty} zoom={fontScale}
+      {editor} {bump} {title} {saving} {dirty} {maximized} zoom={fontScale}
       onNew={newDoc} onOpen={openDoc} onSave={() => saveNow(true)}
       onExport={exportAs} onStyles={() => showStyles = true}
       onSettings={openSettings} onPresent={toggleFullscreen}
-      onZoomIn={() => zoomBy(0.1)} onZoomOut={() => zoomBy(-0.1)} onZoomReset={zoomReset} />
+      onZoomIn={() => zoomBy(0.1)} onZoomOut={() => zoomBy(-0.1)} onZoomReset={zoomReset}
+      onMinimize={winMin} onMaximize={winMax} onClose={winClose} />
   {/if}
 
   <div class="editor-scroll" class:typewriter bind:this={scroller}>
@@ -413,4 +421,6 @@
       onSetToken={setToken} onSetMeasure={setMeasure} onSetDark={setDark}
       onConnect={connectDrive} onDisconnect={disconnectDrive} onClose={() => showSettings = false} />
   {/if}
+
+  <ContextMenu />
 </div>

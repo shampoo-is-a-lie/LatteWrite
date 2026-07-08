@@ -1,5 +1,6 @@
 <script>
   import { GOOGLE_FONTS } from '../googlefonts.js'
+  import Select from './Select.svelte'
   export let settings = {}
   export let connected = false
   export let inputs = []
@@ -44,6 +45,22 @@
     ['bg', 'Background'], ['surface', 'Surface'], ['text', 'Text'], ['muted', 'Muted'],
     ['accent', 'Accent'], ['caret', 'Caret'], ['rule', 'Rule']
   ]
+
+  const ENGINE_OPTS = [
+    { value: 'whisper', label: 'Local Whisper (offline, recommended)' },
+    { value: 'webspeech', label: 'Web Speech (online — unreliable in Electron)' }
+  ]
+  const MODEL_OPTS = [
+    { value: 'onnx-community/whisper-tiny.en', label: 'Tiny — fastest, lower accuracy' },
+    { value: 'onnx-community/whisper-base.en', label: 'Base — balanced' },
+    { value: 'onnx-community/whisper-small.en', label: 'Small — most accurate, slowest' }
+  ]
+  const PROVIDER_OPTS = [
+    { value: 'none', label: 'None' },
+    { value: 'gdrive', label: 'Google Drive' },
+    { value: 'onedrive', label: 'OneDrive (phase 2)' }
+  ]
+  $: micOpts = [{ value: '', label: 'System default' }, ...inputs.map(d => ({ value: d.deviceId, label: d.label }))]
 
   function apply() {
     onPatch({ oauthClientId: clientId, oauthClientSecret: clientSecret, syncProvider, syncOnSave, dictationEngine, whisperModel, audioDeviceId, backupsToKeep: Number(backupsToKeep) })
@@ -167,32 +184,20 @@
 
       <section class="cp-pane" class:active={pane === 'dictation'}>
         <div class="cp-pane-title">Dictation</div>
-    <label class="field">
+    <div class="field">
       <span>Engine</span>
-      <select bind:value={dictationEngine} on:change={apply}>
-        <option value="whisper">Local Whisper (offline, recommended)</option>
-        <option value="webspeech">Web Speech (online — unreliable in Electron)</option>
-      </select>
-    </label>
+      <Select value={dictationEngine} options={ENGINE_OPTS} onChange={(v) => { dictationEngine = v; apply() }} />
+    </div>
     {#if dictationEngine === 'whisper'}
-      <label class="field">
+      <div class="field">
         <span>Whisper model</span>
-        <select bind:value={whisperModel} on:change={apply}>
-          <option value="onnx-community/whisper-tiny.en">Tiny — fastest, lower accuracy</option>
-          <option value="onnx-community/whisper-base.en">Base — balanced</option>
-          <option value="onnx-community/whisper-small.en">Small — most accurate, slowest</option>
-        </select>
-      </label>
+        <Select value={whisperModel} options={MODEL_OPTS} onChange={(v) => { whisperModel = v; apply() }} />
+      </div>
     {/if}
-    <label class="field">
+    <div class="field">
       <span>Microphone</span>
-      <select bind:value={audioDeviceId} on:change={apply}>
-        <option value="">System default</option>
-        {#each inputs as d}
-          <option value={d.deviceId}>{d.label}</option>
-        {/each}
-      </select>
-    </label>
+      <Select value={audioDeviceId} options={micOpts} onChange={(v) => { audioDeviceId = v; apply() }} />
+    </div>
     <div class="row">
       <button class="solid" on:click={testMic}>{micTesting ? 'STOP' : 'TEST MIC'}</button>
       <div class="meter"><div class="meter-fill" style="width:{micLevel * 100}%"></div></div>
@@ -217,14 +222,10 @@
 
       <section class="cp-pane" class:active={pane === 'sync'}>
         <div class="cp-pane-title">Cloud Sync</div>
-    <label class="field">
+    <div class="field">
       <span>Provider</span>
-      <select bind:value={syncProvider} on:change={apply}>
-        <option value="none">None</option>
-        <option value="gdrive">Google Drive</option>
-        <option value="onedrive">OneDrive (phase 2)</option>
-      </select>
-    </label>
+      <Select value={syncProvider} options={PROVIDER_OPTS} onChange={(v) => { syncProvider = v; apply() }} />
+    </div>
     <label class="check">
       <input type="checkbox" bind:checked={syncOnSave} on:change={apply} /> Sync on every save
     </label>

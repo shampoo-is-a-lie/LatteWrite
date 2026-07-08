@@ -1,4 +1,4 @@
-import { app, shell, BrowserWindow, ipcMain, dialog, session, Menu, MenuItem } from 'electron'
+import { app, shell, BrowserWindow, ipcMain, dialog, session } from 'electron'
 import { join } from 'path'
 import fs from 'fs'
 import store from './store.js'
@@ -28,7 +28,7 @@ function createWindow() {
     minWidth: 640,
     minHeight: 480,
     backgroundColor: '#17100a',
-    autoHideMenuBar: true,
+    frame: false,
     show: false,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
@@ -41,26 +41,23 @@ function createWindow() {
   ses.setSpellCheckerLanguages(['en-US'])
   ses.setSpellCheckerEnabled(store.get('spellcheck'))
 
-  // Right-click a misspelled word for suggestions + add-to-dictionary; plus the
-  // usual cut/copy/paste on editable text.
+  // Route right-clicks to the renderer so the context menu can be fully themed.
   mainWindow.webContents.on('context-menu', (_e, params) => {
-    const menu = new Menu()
-    if (params.misspelledWord) {
-      for (const s of params.dictionarySuggestions) {
-        menu.append(new MenuItem({ label: s, click: () => mainWindow.webContents.replaceMisspelling(s) }))
-      }
-      menu.append(new MenuItem({ type: 'separator' }))
-      menu.append(new MenuItem({ label: 'Add to dictionary', click: () => ses.addWordToSpellCheckerDictionary(params.misspelledWord) }))
-      menu.append(new MenuItem({ type: 'separator' }))
-    }
-    if (params.editFlags.canCut) menu.append(new MenuItem({ role: 'cut' }))
-    if (params.editFlags.canCopy) menu.append(new MenuItem({ role: 'copy' }))
-    if (params.editFlags.canPaste) menu.append(new MenuItem({ role: 'paste' }))
-    if (params.editFlags.canSelectAll) menu.append(new MenuItem({ role: 'selectAll' }))
-    if (menu.items.length) menu.popup()
+    mainWindow.webContents.send('context-menu', {
+      x: params.x, y: params.y,
+      misspelledWord: params.misspelledWord,
+      suggestions: params.dictionarySuggestions || [],
+      isEditable: params.isEditable,
+      canCut: params.editFlags.canCut,
+      canCopy: params.editFlags.canCopy,
+      canPaste: params.editFlags.canPaste,
+      canSelectAll: params.editFlags.canSelectAll
+    })
   })
 
   mainWindow.on('ready-to-show', () => mainWindow.show())
+  mainWindow.on('maximize', () => mainWindow.webContents.send('window:maximized', true))
+  mainWindow.on('unmaximize', () => mainWindow.webContents.send('window:maximized', false))
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url)
     return { action: 'deny' }
@@ -181,12 +178,24 @@ ipcMain.handle('export:docx', async (_e, payload) => {
 // ── Fonts ─────────────────────────────────────────────────────────────────────
 ipcMain.handle('fonts:load', (_e, family) => loadFontCss(family))
 
-// ── Spellcheck ────────────────────────────────────────────────────────────────
+// ── Spellcheck / edit (for the themed context menu) ───────────────────────────
 ipcMain.handle('spell:set', (_e, enabled) => {
   store.set('spellcheck', enabled)
   session.defaultSession.setSpellCheckerEnabled(enabled)
   return enabled
 })
+ipcMain.handle('spell:replace', (_e, word) => mainWindow.webContents.replaceMisspelling(word))
+ipcMain.handle('spell:add', (_e, word) => session.defaultSession.addWordToSpellCheckerDictionary(word))
+ipcMain.handle('edit:cut', () => mainWindow.webContents.cut())
+ipcMain.handle('edit:copy', () => mainWindow.webContents.copy())
+ipcMain.handle('edit:paste', () => mainWindow.webContents.paste())
+ipcMain.handle('edit:selectAll', () => mainWindow.webContents.selectAll())
+
+// ── Window controls (frameless) ───────────────────────────────────────────────
+ipcMain.handle('window:minimize', () => mainWindow.minimize())
+ipcMain.handle('window:maximize', () => { mainWindow.isMaximized() ? mainWindow.unmaximize() : mainWindow.maximize() })
+ipcMain.handle('window:close', () => mainWindow.close())
+ipcMain.handle('window:isMaximized', () => mainWindow.isMaximized())
 
 // ── Window ────────────────────────────────────────────────────────────────────
 ipcMain.handle('window:presentation', () => {

@@ -30,14 +30,38 @@ contextBridge.exposeInMainWorld('api', {
     load: (family) => ipcRenderer.invoke('fonts:load', family)
   },
   spell: {
-    set: (enabled) => ipcRenderer.invoke('spell:set', enabled)
+    set: (enabled) => ipcRenderer.invoke('spell:set', enabled),
+    replace: (word) => ipcRenderer.invoke('spell:replace', word),
+    add: (word) => ipcRenderer.invoke('spell:add', word)
+  },
+  edit: {
+    cut: () => ipcRenderer.invoke('edit:cut'),
+    copy: () => ipcRenderer.invoke('edit:copy'),
+    paste: () => ipcRenderer.invoke('edit:paste'),
+    selectAll: () => ipcRenderer.invoke('edit:selectAll')
+  },
+  contextMenu: {
+    onShow: (cb) => {
+      const listener = (_e, data) => cb(data)
+      ipcRenderer.on('context-menu', listener)
+      return () => ipcRenderer.off('context-menu', listener)
+    }
   },
   window: {
     togglePresentation: () => ipcRenderer.invoke('window:presentation'),
+    minimize: () => ipcRenderer.invoke('window:minimize'),
+    maximize: () => ipcRenderer.invoke('window:maximize'),
+    close: () => ipcRenderer.invoke('window:close'),
+    isMaximized: () => ipcRenderer.invoke('window:isMaximized'),
     onFullscreen: (cb) => {
       const listener = (_e, v) => cb(v)
       ipcRenderer.on('window:fullscreen', listener)
       return () => ipcRenderer.off('window:fullscreen', listener)
+    },
+    onMaximized: (cb) => {
+      const listener = (_e, v) => cb(v)
+      ipcRenderer.on('window:maximized', listener)
+      return () => ipcRenderer.off('window:maximized', listener)
     }
   }
 })
