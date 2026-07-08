@@ -1,8 +1,8 @@
 <script>
-  import { createEventDispatcher } from 'svelte'
+  import { createEventDispatcher, onMount, onDestroy } from 'svelte'
 
   export let active = false
-  export let shapes = []
+  export let shapes = []      // coordinates are normalised 0..1 relative to the text area
   export let onExit = () => {}
 
   const dispatch = createEventDispatcher()
@@ -13,12 +13,19 @@
   let svg
   let current = null
   let start = null
+  let W = 1, H = 1 // current pixel size of the layer; coords are re-projected onto it
 
   const WIDTHS = [2, 4, 8]
 
+  let ro
+  function measure() { if (svg) { const r = svg.getBoundingClientRect(); W = r.width || 1; H = r.height || 1 } }
+  onMount(() => { measure(); ro = new ResizeObserver(measure); if (svg) ro.observe(svg) })
+  onDestroy(() => ro && ro.disconnect())
+
+  // pointer → normalised position
   function pos(e) {
     const r = svg.getBoundingClientRect()
-    return { x: e.clientX - r.left, y: e.clientY - r.top }
+    return { x: (e.clientX - r.left) / (r.width || 1), y: (e.clientY - r.top) / (r.height || 1) }
   }
 
   function down(e) {
@@ -51,28 +58,28 @@
     if (current) { shapes = [...shapes, current]; current = null; dispatch('change') }
   }
 
-  function bbox(s) {
+  function nbbox(s) {
     if (s.type === 'path') { const xs = s.points.map(p => p.x), ys = s.points.map(p => p.y); return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)] }
     if (s.type === 'rect') return [s.x, s.y, s.x + s.w, s.y + s.h]
     if (s.type === 'ellipse') return [s.cx - s.rx, s.cy - s.ry, s.cx + s.rx, s.cy + s.ry]
     return [Math.min(s.x1, s.x2), Math.min(s.y1, s.y2), Math.max(s.x1, s.x2), Math.max(s.y1, s.y2)]
   }
   function eraseAt(x, y) {
-    const pad = 10
-    const next = shapes.filter(s => { const [x1, y1, x2, y2] = bbox(s); return !(x >= x1 - pad && x <= x2 + pad && y >= y1 - pad && y <= y2 + pad) })
+    const px = 12 / W, py = 12 / H
+    const next = shapes.filter(s => { const [x1, y1, x2, y2] = nbbox(s); return !(x >= x1 - px && x <= x2 + px && y >= y1 - py && y <= y2 + py) })
     if (next.length !== shapes.length) { shapes = next; dispatch('change') }
   }
 
-  const pathD = (s) => 'M ' + s.points.map(p => `${p.x} ${p.y}`).join(' L ')
+  // render helpers project normalised coords onto the current pixel size
+  const pathD = (s) => 'M ' + s.points.map(p => `${p.x * W} ${p.y * H}`).join(' L ')
   const arrowLen = (s) => 10 + s.width * 1.6
   function arrowHead(s) {
-    const a = Math.atan2(s.y2 - s.y1, s.x2 - s.x1), L = arrowLen(s), w = 0.5
-    return `${s.x2},${s.y2} ${s.x2 - L * Math.cos(a - w)},${s.y2 - L * Math.sin(a - w)} ${s.x2 - L * Math.cos(a + w)},${s.y2 - L * Math.sin(a + w)}`
+    const x2 = s.x2 * W, y2 = s.y2 * H, a = Math.atan2(s.y2 * H - s.y1 * H, s.x2 * W - s.x1 * W), L = arrowLen(s), w = 0.5
+    return `${x2},${y2} ${x2 - L * Math.cos(a - w)},${y2 - L * Math.sin(a - w)} ${x2 - L * Math.cos(a + w)},${y2 - L * Math.sin(a + w)}`
   }
-  // End the shaft at the arrowhead's base so the round cap doesn't poke past the tip.
   function arrowBase(s) {
-    const a = Math.atan2(s.y2 - s.y1, s.x2 - s.x1), d = arrowLen(s) * Math.cos(0.5)
-    return { x: s.x2 - d * Math.cos(a), y: s.y2 - d * Math.sin(a) }
+    const a = Math.atan2(s.y2 * H - s.y1 * H, s.x2 * W - s.x1 * W), d = arrowLen(s) * Math.cos(0.5)
+    return { x: s.x2 * W - d * Math.cos(a), y: s.y2 * H - d * Math.sin(a) }
   }
 
   function undo() { if (shapes.length) { shapes = shapes.slice(0, -1); dispatch('change') } }
@@ -85,15 +92,15 @@
     {#if s.type === 'path'}
       <path d={pathD(s)} stroke={s.color} stroke-width={s.width} fill="none" stroke-linecap="round" stroke-linejoin="round" />
     {:else if s.type === 'line'}
-      <line x1={s.x1} y1={s.y1} x2={s.x2} y2={s.y2} stroke={s.color} stroke-width={s.width} stroke-linecap="round" />
+      <line x1={s.x1 * W} y1={s.y1 * H} x2={s.x2 * W} y2={s.y2 * H} stroke={s.color} stroke-width={s.width} stroke-linecap="round" />
     {:else if s.type === 'arrow'}
       {@const b = arrowBase(s)}
-      <line x1={s.x1} y1={s.y1} x2={b.x} y2={b.y} stroke={s.color} stroke-width={s.width} stroke-linecap="round" />
+      <line x1={s.x1 * W} y1={s.y1 * H} x2={b.x} y2={b.y} stroke={s.color} stroke-width={s.width} stroke-linecap="round" />
       <polygon points={arrowHead(s)} fill={s.color} stroke={s.color} stroke-width={s.width} stroke-linejoin="round" />
     {:else if s.type === 'rect'}
-      <rect x={s.x} y={s.y} width={s.w} height={s.h} stroke={s.color} stroke-width={s.width} fill="none" />
+      <rect x={s.x * W} y={s.y * H} width={s.w * W} height={s.h * H} stroke={s.color} stroke-width={s.width} fill="none" />
     {:else if s.type === 'ellipse'}
-      <ellipse cx={s.cx} cy={s.cy} rx={s.rx} ry={s.ry} stroke={s.color} stroke-width={s.width} fill="none" />
+      <ellipse cx={s.cx * W} cy={s.cy * H} rx={s.rx * W} ry={s.ry * H} stroke={s.color} stroke-width={s.width} fill="none" />
     {/if}
   {/each}
 </svg>
