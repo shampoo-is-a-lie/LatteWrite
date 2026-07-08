@@ -146,6 +146,16 @@
   let pane = 'style'
   let fontModal = null // 'heading' | 'body' | null
 
+  let backupMsg = ''
+  async function doBackup() {
+    const p = await window.api.backup.create()
+    backupMsg = p ? 'Backup saved to ' + p : ''
+  }
+  async function doRestore() {
+    if (!confirm('Restore will replace ALL current settings, custom styles and cached fonts with the backup, then restart LatteWrite. Continue?')) return
+    await window.api.backup.restore()
+  }
+
   let gpuMsg = ''
   async function testGpu() {
     gpuMsg = 'Checking…'
@@ -321,6 +331,14 @@
       <input type="number" min="1" max="100" bind:value={backupsToKeep} on:change={apply} />
     </label>
     <p class="note">Every save keeps a rolling ring of timestamped backups in a sibling .backups folder next to your document.</p>
+
+        <div class="subhead">Full app backup</div>
+        <p class="note">Save all settings, custom styles and cached fonts as a single .zip — or restore everything from one (this replaces current data and restarts the app).</p>
+        <div class="row">
+          <button class="solid" on:click={doBackup}>BACK UP (.ZIP)</button>
+          <button class="solid" on:click={doRestore}>RESTORE…</button>
+        </div>
+        {#if backupMsg}<p class="note">{backupMsg}</p>{/if}
       </section>
     </div>
   </div>

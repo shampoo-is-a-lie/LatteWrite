@@ -31,6 +31,10 @@ contextBridge.exposeInMainWorld('api', {
   fonts: {
     load: (family) => ipcRenderer.invoke('fonts:load', family)
   },
+  backup: {
+    create: () => ipcRenderer.invoke('backup:create'),
+    restore: () => ipcRenderer.invoke('backup:restore')
+  },
   spell: {
     set: (enabled) => ipcRenderer.invoke('spell:set', enabled),
     replace: (word) => ipcRenderer.invoke('spell:replace', word),

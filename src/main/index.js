@@ -1,7 +1,8 @@
 import { app, shell, BrowserWindow, ipcMain, dialog, session } from 'electron'
 import { join, dirname } from 'path'
 import fs from 'fs'
-import store from './store.js'
+import AdmZip from 'adm-zip'
+import store, { dataPath } from './store.js'
 import { startAuthFlow, signOut, isAuthenticated } from './auth.js'
 import { syncBundle as gdriveSync } from './drive.js'
 import { syncBundle as onedriveSync } from './onedrive.js'
@@ -20,6 +21,7 @@ app.commandLine.appendSwitch('enable-features', 'Vulkan')
 app.commandLine.appendSwitch('ignore-gpu-blocklist')
 
 let mainWindow = null
+let saveBoundsOnClose = true
 
 function createWindow() {
   const b = store.get('windowBounds') || {}
@@ -42,7 +44,8 @@ function createWindow() {
   if (b.maximized) mainWindow.maximize()
 
   mainWindow.on('close', () => {
-    store.set('windowBounds', { ...mainWindow.getNormalBounds(), maximized: mainWindow.isMaximized() })
+    // Skip during restore so we don't overwrite the just-restored config.
+    if (saveBoundsOnClose) store.set('windowBounds', { ...mainWindow.getNormalBounds(), maximized: mainWindow.isMaximized() })
   })
 
   const ses = mainWindow.webContents.session
@@ -231,6 +234,33 @@ ipcMain.handle('edit:cut', () => mainWindow.webContents.cut())
 ipcMain.handle('edit:copy', () => mainWindow.webContents.copy())
 ipcMain.handle('edit:paste', () => mainWindow.webContents.paste())
 ipcMain.handle('edit:selectAll', () => mainWindow.webContents.selectAll())
+
+// ── Full backup / restore (settings, custom styles, cached fonts) ─────────────
+ipcMain.handle('backup:create', async () => {
+  const stamp = new Date().toISOString().slice(0, 10)
+  const res = await dialog.showSaveDialog(mainWindow, {
+    defaultPath: join(app.getPath('home'), `LatteWrite-backup-${stamp}.zip`),
+    filters: [{ name: 'Zip', extensions: ['zip'] }]
+  })
+  if (res.canceled || !res.filePath) return null
+  const zip = new AdmZip()
+  zip.addLocalFolder(dataPath) // config.json (settings + custom styles) + fonts/
+  zip.writeZip(res.filePath)
+  return res.filePath
+})
+
+ipcMain.handle('backup:restore', async () => {
+  const res = await dialog.showOpenDialog(mainWindow, {
+    properties: ['openFile'], filters: [{ name: 'Zip', extensions: ['zip'] }]
+  })
+  if (res.canceled || !res.filePaths[0]) return false
+  const zip = new AdmZip(res.filePaths[0])
+  zip.extractAllTo(dataPath, true)
+  saveBoundsOnClose = false
+  app.relaunch()
+  app.exit(0)
+  return true
+})
 
 // ── Window controls (frameless) ───────────────────────────────────────────────
 ipcMain.handle('window:minimize', () => mainWindow.minimize())
