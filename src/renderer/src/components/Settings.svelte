@@ -5,10 +5,16 @@
   export let inputs = []
   export let headingFamily = ''
   export let bodyFamily = ''
+  export let tokens = {}
+  export let measure = '46rem'
+  export let dark = true
   export let isDraft = false
   export let editingLabel = ''
   export let onPatch = () => {}
   export let onSetFont = () => {}
+  export let onSetToken = () => {}
+  export let onSetMeasure = () => {}
+  export let onSetDark = () => {}
   export let onSaveStyle = () => {}
   export let onSpellcheck = () => {}
   export let onConnect = () => {}
@@ -27,9 +33,17 @@
   let fb = bodyFamily
   let newStyleName = ''
   let spellcheck = settings.spellcheck !== false
-  // Reflect the live style/draft fonts (e.g. after a fork) back into the inputs.
+  // Reflect the live style/draft values (e.g. after a fork) back into the inputs.
   $: fh = headingFamily
   $: fb = bodyFamily
+  $: colors = { ...tokens }
+  $: measureNum = parseFloat(measure) || 46
+  $: darkV = !!dark
+
+  const TOKENS = [
+    ['bg', 'Background'], ['surface', 'Surface'], ['text', 'Text'], ['muted', 'Muted'],
+    ['accent', 'Accent'], ['caret', 'Caret'], ['rule', 'Rule']
+  ]
 
   function apply() {
     onPatch({ oauthClientId: clientId, oauthClientSecret: clientSecret, syncProvider, syncOnSave, dictationEngine, whisperModel, audioDeviceId, backupsToKeep: Number(backupsToKeep) })
@@ -79,8 +93,9 @@
   <h2>SETTINGS</h2>
 
   <section>
-    <h3>FONTS</h3>
-    <p class="editing">Editing <b>{editingLabel}</b></p>
+    <h3>STYLE — {editingLabel}</h3>
+
+    <div class="subhead">Fonts</div>
     <label class="field">
       <span>Heading font</span>
       <input list="gfonts" bind:value={fh} on:change={() => onSetFont('heading', fh)} placeholder="Style default" />
@@ -89,9 +104,28 @@
       <span>Body font</span>
       <input list="gfonts" bind:value={fb} on:change={() => onSetFont('body', fb)} placeholder="Style default" />
     </label>
-    <datalist id="gfonts">
-      {#each GOOGLE_FONTS as f}<option value={f}></option>{/each}
-    </datalist>
+    <datalist id="gfonts">{#each GOOGLE_FONTS as f}<option value={f}></option>{/each}</datalist>
+
+    <div class="subhead">Colours</div>
+    <div class="swatches">
+      {#each TOKENS as [key, label]}
+        <label class="swatch">
+          <input type="color" value={colors[key]} on:input={(e) => onSetToken(key, e.target.value)} />
+          <span>{label}</span>
+        </label>
+      {/each}
+    </div>
+
+    <div class="tworow">
+      <label class="field">
+        <span>Reading width (rem)</span>
+        <input type="number" min="24" max="80" bind:value={measureNum} on:change={() => onSetMeasure(measureNum + 'rem')} />
+      </label>
+      <label class="check darkcheck">
+        <input type="checkbox" bind:checked={darkV} on:change={() => onSetDark(darkV)} /> Dark style
+      </label>
+    </div>
+
     {#if isDraft}
       <div class="row">
         <input bind:value={newStyleName} placeholder="Name your style" on:keydown={(e) => e.key === 'Enter' && onSaveStyle(newStyleName)} />
@@ -99,7 +133,7 @@
       </div>
       <p class="note">Built-in styles are immutable, so this is an unsaved copy. Name and save it to keep it in your Style menu.</p>
     {:else}
-      <p class="note">Any Google font — type to search or paste a family name (cached offline). Changing a built-in style's font creates a saveable copy; custom styles are edited in place. Clear a field to use the base font.</p>
+      <p class="note">Editing a built-in forks a saveable copy; custom styles update live. Fonts accept any Google family (cached offline). Selection colour follows the accent.</p>
     {/if}
   </section>
 
@@ -214,6 +248,14 @@
   .note { font-size: 0.75rem; color: var(--muted); margin: 0.2rem 0 0; line-height: 1.4; }
   .editing { font-size: 0.8rem; color: var(--muted); margin: 0 0 0.7rem; }
   .editing b { color: var(--accent); }
+  .subhead { font-size: 0.7rem; letter-spacing: 0.12em; color: var(--muted); margin: 0.9rem 0 0.5rem; text-transform: uppercase; }
+  .swatches { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.6rem; }
+  .swatch { display: flex; flex-direction: column; align-items: center; gap: 0.3rem; cursor: pointer; }
+  .swatch input[type=color] { width: 100%; height: 32px; border: 1px solid var(--rule); border-radius: 8px; background: none; cursor: pointer; padding: 2px; }
+  .swatch span { font-size: 0.68rem; color: var(--muted); }
+  .tworow { display: flex; gap: 1rem; align-items: flex-end; margin-top: 0.7rem; }
+  .tworow .field { flex: 1; margin-bottom: 0; }
+  .darkcheck { margin-bottom: 0.5rem; white-space: nowrap; }
   .meter { flex: 1; height: 10px; background: var(--bg); border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; }
   .meter-fill { height: 100%; background: var(--accent); transition: width 0.06s linear; }
   .creds { margin-top: 0.5rem; }

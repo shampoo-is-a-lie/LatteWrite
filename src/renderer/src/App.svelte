@@ -182,26 +182,47 @@
 
   // Change a font. Built-ins are immutable → fork an unsaved draft. Custom styles
   // are edited in place. Blank family reverts that slot to the base built-in's font.
-  function setFont(kind, family) {
-    const fam = (family || '').trim()
+  function hexToRgba(hex, a) {
+    const h = hex.replace('#', '')
+    const n = h.length === 3 ? h.split('').map(c => c + c).join('') : h
+    const r = parseInt(n.slice(0, 2), 16), g = parseInt(n.slice(2, 4), 16), b = parseInt(n.slice(4, 6), 16)
+    return `rgba(${r},${g},${b},${a})`
+  }
+
+  // Apply a mutation to the current editable style: edit a custom style in place,
+  // or fork an immutable built-in into an unsaved draft first.
+  function editStyle(mutate) {
     if (draft) {
-      draft.fonts[kind] = fam || (STYLES[draft.base]?.fonts[kind] ?? draft.fonts[kind])
+      mutate(draft)
       draft = draft
     } else if (customStyles[style]) {
-      const cs = customStyles[style]
-      const base = STYLES[cs.base] || STYLES.Espresso
-      cs.fonts[kind] = fam || base.fonts[kind]
-      customStyles = { ...customStyles }
+      const cs = { ...customStyles[style], fonts: { ...customStyles[style].fonts }, tokens: { ...customStyles[style].tokens } }
+      mutate(cs)
+      customStyles = { ...customStyles, [style]: cs }
       window.api.settings.set({ customStyles })
     } else {
-      if (!fam) return
       draftBase = style
       draft = cloneStyle(STYLES[style])
       draft.base = style
-      draft.fonts[kind] = fam
+      mutate(draft)
     }
     applyCurrent()
   }
+
+  function setFont(kind, family) {
+    const fam = (family || '').trim()
+    if (!fam && !draft && !customStyles[style]) return // clearing an unedited built-in
+    editStyle(s => { s.fonts[kind] = fam || (STYLES[s.base]?.fonts[kind] ?? STYLES[style].fonts[kind]) })
+  }
+
+  function setToken(key, value) {
+    editStyle(s => {
+      s.tokens[key] = value
+      if (key === 'accent') s.tokens.selection = hexToRgba(value, 0.28) // keep selection tied to accent
+    })
+  }
+  function setMeasure(value) { editStyle(s => { s.measure = value }) }
+  function setDark(v) { editStyle(s => { s.dark = v }) }
 
   function saveStyle(name) {
     name = (name || '').trim()
@@ -386,8 +407,10 @@
   {#if showSettings}
     <Settings {settings} {connected} inputs={audioInputs}
       headingFamily={curObj.fonts.heading} bodyFamily={curObj.fonts.body}
+      tokens={curObj.tokens} measure={curObj.measure} dark={curObj.dark}
       isDraft={!!draft} {editingLabel}
       onPatch={patchSettings} onSetFont={setFont} onSaveStyle={saveStyle} onSpellcheck={setSpellcheck}
+      onSetToken={setToken} onSetMeasure={setMeasure} onSetDark={setDark}
       onConnect={connectDrive} onDisconnect={disconnectDrive} onClose={() => showSettings = false} />
   {/if}
 </div>
