@@ -107,7 +107,23 @@
   }
 
   function onReady(ed) { editor = ed; computeTitle(); updatePresentation() }
-  function onChange() { bump++; dirty = true; computeTitle(); scheduleAutosave(); updatePresentation() }
+  function onChange() {
+    bump++; dirty = true; computeTitle(); updatePresentation()
+    if (!filePath) createDraft()
+    else scheduleAutosave()
+  }
+
+  // First edit of an unsaved document → create an autosaved draft in /latte
+  // straight away (named from the auto-title), so no work is ever lost.
+  let creatingDraft = false
+  async function createDraft() {
+    if (filePath || creatingDraft || !editor) return
+    creatingDraft = true
+    const res = await window.api.doc.autoNew({ doc: editor.getJSON(), meta: buildMeta() })
+    if (res) { filePath = res.filePath; dirty = false }
+    creatingDraft = false
+    scheduleAutosave()
+  }
   function onSelect() { bump++; updatePresentation() }
 
   // ── Presentation modes ──────────────────────────────────────────────────────
@@ -163,6 +179,15 @@
     if (!editor) return
     if (!filePath && !explicit) return
     saving = true
+    // Until the user names it, keep the draft's filename following the auto-title.
+    if (filePath && !titleManual) {
+      const base = filePath.split('/').pop().replace(/\.latte$/i, '')
+      const want = title.trim()
+      if (want && want !== base) {
+        const r = await window.api.doc.rename({ filePath, name: want, soft: true })
+        if (r) filePath = r.filePath
+      }
+    }
     const res = await window.api.doc.save({ filePath, doc: editor.getJSON(), meta: buildMeta() })
     if (res) { filePath = res.filePath; dirty = false; computeTitle() }
     saving = false

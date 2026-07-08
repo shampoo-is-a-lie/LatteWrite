@@ -91,6 +91,10 @@ function docsDir() {
   return dir
 }
 
+function sanitizeName(name) {
+  return (name || '').replace(/[\/\\:*?"<>|\n\r\t]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60)
+}
+
 function addRecent(filePath) {
   const recent = [filePath, ...store.get('recentFiles').filter(f => f !== filePath)].slice(0, 12)
   store.set('recentFiles', recent)
@@ -169,14 +173,29 @@ ipcMain.handle('docs:search', (_e, query) => {
   } catch { return [] }
 })
 
-ipcMain.handle('doc:rename', (_e, { filePath, name }) => {
-  const clean = (name || '').replace(/[\/\\:*?"<>|]/g, '_').trim() || 'Untitled'
+ipcMain.handle('doc:rename', (_e, { filePath, name, soft }) => {
+  const clean = sanitizeName(name) || 'Untitled'
   let target = join(dirname(filePath), clean + '.latte')
   if (target === filePath) return { filePath }
-  if (fs.existsSync(target)) target = join(dirname(filePath), `${clean}_${Date.now()}.latte`)
+  if (fs.existsSync(target)) {
+    if (soft) return { filePath } // auto-naming: don't collide, keep the current name
+    target = join(dirname(filePath), `${clean}_${Date.now()}.latte`)
+  }
   fs.renameSync(filePath, target)
   store.set('recentFiles', store.get('recentFiles').map(f => f === filePath ? target : f))
   store.set('currentFile', target)
+  return { filePath: target }
+})
+
+// Create an autosaved draft in the latte folder immediately (unique name).
+ipcMain.handle('doc:autoNew', (_e, { doc, meta }) => {
+  const dir = docsDir()
+  const base = sanitizeName(meta?.title) || 'Untitled'
+  let name = base, i = 1
+  while (fs.existsSync(join(dir, name + '.latte'))) { name = `${base}_${String(i).padStart(2, '0')}`; i++ }
+  const target = join(dir, name + '.latte')
+  saveDocument(target, { doc, meta }, store.get('backupsToKeep'))
+  addRecent(target)
   return { filePath: target }
 })
 
