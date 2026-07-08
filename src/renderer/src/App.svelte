@@ -7,6 +7,7 @@
   import Settings from './components/Settings.svelte'
   import ContextMenu from './components/ContextMenu.svelte'
   import ConfirmDialog from './components/ConfirmDialog.svelte'
+  import Drawing from './components/Drawing.svelte'
   import { applyStyle } from './theme.js'
   import { STYLES, isBuiltin, cloneStyle } from './styles.js'
   import { fontStack, ensureFontLoaded } from './fonts.js'
@@ -43,7 +44,11 @@
   let showSettings = false
   let connected = false
   let maximized = false
+  let drawMode = false
+  let drawings = []
   let dialog = null  // themed alert/confirm
+
+  function onDrawChange() { dirty = true; scheduleAutosave() }
 
   function showAlert(title, message) {
     dialog = { title, message, confirmLabel: 'OK', cancelLabel: '', danger: false, onConfirm: () => dialog = null }
@@ -77,7 +82,7 @@
 
   function buildMeta() {
     const obj = resolveCurrent()
-    return { title, titleManual, style, fontScale, bodyFont: fontStack(obj.fonts.body), headingFont: fontStack(obj.fonts.heading), updatedAt: Date.now() }
+    return { title, titleManual, style, fontScale, drawings, bodyFont: fontStack(obj.fonts.body), headingFont: fontStack(obj.fonts.heading), updatedAt: Date.now() }
   }
 
   // Auto-derive the name from the first line — unless the user has set it explicitly.
@@ -180,6 +185,7 @@
     draft = null; draftBase = ''
     if (meta.style && (STYLES[meta.style] || customStyles[meta.style])) style = meta.style
     fontScale = meta.fontScale || 1
+    drawings = meta.drawings || []
     applyCurrent()
     dirty = false
     titleManual = !!meta.titleManual
@@ -194,6 +200,7 @@
     filePath = ''
     dirty = false
     titleManual = false
+    drawings = []
     computeTitle()
   }
 
@@ -467,11 +474,14 @@
       onSettings={openSettings} onPresent={toggleFullscreen}
       onZoomIn={() => zoomBy(0.1)} onZoomOut={() => zoomBy(-0.1)} onZoomReset={zoomReset}
       onMinimize={winMin} onMaximize={winMax} onClose={winClose} onRename={commitTitle}
-      onOpenDoc={openByPath} />
+      onOpenDoc={openByPath} drawing={drawMode} onDraw={() => drawMode = !drawMode} />
   {/if}
 
   <div class="editor-scroll" class:typewriter bind:this={scroller}>
-    <Editor {onReady} {onChange} {onSelect} focus={focusMode} reveal={revealMode} {revealCount} />
+    <div class="draw-host">
+      <Editor {onReady} {onChange} {onSelect} focus={focusMode} reveal={revealMode} {revealCount} />
+      <Drawing active={drawMode} bind:shapes={drawings} on:change={onDrawChange} onExit={() => drawMode = false} />
+    </div>
   </div>
 
   <PresentationBar

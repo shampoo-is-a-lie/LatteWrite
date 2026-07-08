@@ -39,6 +39,8 @@ body {
   scroll-behavior: smooth;
 }
 
+.draw-host { position: relative; }
+
 .editor-page {
   max-width: var(--measure);
   margin: 0 auto;

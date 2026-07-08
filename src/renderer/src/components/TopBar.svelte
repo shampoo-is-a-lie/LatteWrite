@@ -22,6 +22,8 @@
   export let onClose = () => {}
   export let onRename = () => {}
   export let onOpenDoc = () => {}
+  export let drawing = false
+  export let onDraw = () => {}
 
   let showFile = false
   let titleVal = title
@@ -103,6 +105,7 @@
     <div class="searchwrap"><DocSearch onOpen={onOpenDoc} /></div>
     <div class="spacer"></div>
 
+    <button class:on={drawing} on:click={onDraw} title="Draw over the text">DRAW</button>
     <button on:click={onStyles}>STYLE</button>
     <button on:click={onSettings}>SETTINGS</button>
     <div class="winctl">
