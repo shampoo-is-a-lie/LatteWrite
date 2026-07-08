@@ -87,10 +87,6 @@
     return editor.state.selection.$head.index(0)
   }
 
-  function currentBlockEl() {
-    return editor?.view.dom.children[currentBlockIndex()] || null
-  }
-
   function scrollCaretToCenter() {
     if (!editor || !scroller) return
     let coords
@@ -109,19 +105,23 @@
     scroller.scrollTo({ top: Math.max(0, y - scroller.clientHeight / 2 + el.offsetHeight / 2), behavior: 'smooth' })
   }
 
+  // Style each top-level block directly with inline opacity — no class/CSS
+  // matching to go wrong. Focus dims all but the caret's block; reveal hides
+  // everything past the frontier.
   function updatePresentation() {
     if (!editor) return
-    requestAnimationFrame(() => {
-      if (!editor) return
-      const cur = focusMode ? currentBlockEl() : null
-      let i = 0
-      for (const el of editor.view.dom.children) {
-        el.classList.toggle('focus-line', focusMode && el === cur)
-        el.classList.toggle('reveal-hidden', revealMode && i >= revealCount)
-        i++
-      }
-      if (typewriter) scrollCaretToCenter()
-    })
+    const kids = editor.view.dom.children
+    const curIdx = focusMode ? currentBlockIndex() : -1
+    for (let i = 0; i < kids.length; i++) {
+      const el = kids[i]
+      let op = ''
+      if (revealMode && i >= revealCount) op = '0'
+      else if (focusMode && i !== curIdx) op = '0.28'
+      el.style.opacity = op
+      el.style.transition = 'opacity 0.3s ease'
+      el.style.pointerEvents = (revealMode && i >= revealCount) ? 'none' : ''
+    }
+    if (typewriter) requestAnimationFrame(scrollCaretToCenter)
   }
 
   function toggleTypewriter() { typewriter = !typewriter; window.api.settings.set({ typewriter }); updatePresentation() }
