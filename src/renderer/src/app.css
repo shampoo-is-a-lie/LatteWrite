@@ -91,6 +91,10 @@ body {
 .dictation-interim { color: var(--muted); opacity: 0.75; }
 
 /* ── Presentation modes ─────────────────────────────────────────────────────── */
-/* Typewriter: extra padding lets the caret sit at the vertical centre. Focus and
-   reveal set per-block opacity inline (see updatePresentation). */
+/* Typewriter: extra padding lets the caret sit at the vertical centre. */
 .editor-scroll.typewriter .editor-page { padding-top: 45vh; padding-bottom: 45vh; }
+
+/* Focus/reveal: applied as ProseMirror node decorations (so ProseMirror keeps
+   them). Focus dims non-caret blocks; reveal hides blocks past the frontier. */
+.ProseMirror .lw-dim { opacity: 0.28; transition: opacity 0.3s ease; }
+.ProseMirror .lw-hidden { opacity: 0; transition: opacity 0.4s ease; pointer-events: none; }

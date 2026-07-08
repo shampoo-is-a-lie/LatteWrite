@@ -9,11 +9,15 @@
   import Color from '@tiptap/extension-color'
   import Highlight from '@tiptap/extension-highlight'
   import FontFamily from '@tiptap/extension-font-family'
+  import { Presentation } from '../presentation-extension.js'
 
   export let content = null
   export let onReady = () => {}
   export let onChange = () => {}
   export let onSelect = () => {}
+  export let focus = false
+  export let reveal = false
+  export let revealCount = 1
 
   let element
   let editor
@@ -29,15 +33,24 @@
         Highlight.configure({ multicolor: true }),
         FontFamily,
         TextAlign.configure({ types: ['heading', 'paragraph'] }),
-        Placeholder.configure({ placeholder: 'Start writing…' })
+        Placeholder.configure({ placeholder: 'Start writing…' }),
+        Presentation
       ],
       content: content || '',
       autofocus: 'end',
-      onUpdate: () => onChange(),
+      onUpdate: ({ transaction }) => { if (transaction.docChanged) onChange() },
       onSelectionUpdate: () => onSelect()
     })
     onReady(editor)
   })
+
+  // Push presentation flags into the extension and force a decoration refresh.
+  $: if (editor) {
+    editor.storage.presentation.focus = focus
+    editor.storage.presentation.reveal = reveal
+    editor.storage.presentation.revealCount = revealCount
+    editor.view.dispatch(editor.state.tr.setMeta('lw-presentation', Date.now()))
+  }
 
   onDestroy(() => editor && editor.destroy())
 </script>

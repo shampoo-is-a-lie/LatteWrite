@@ -80,23 +80,11 @@
   function onSelect() { bump++; updatePresentation() }
 
   // ── Presentation modes ──────────────────────────────────────────────────────
-  // Work off the actual rendered editor DOM and the live browser selection, so
-  // presentation styling never depends on an editor-instance reference.
-  function visiblePM() { return document.querySelector('.editor-scroll .ProseMirror') }
-
-  function currentBlockEl() {
-    const pm = visiblePM()
-    if (!pm) return null
-    const s = window.getSelection()
-    let n = s && s.anchorNode
-    if (n && n.nodeType === 3) n = n.parentNode
-    while (n && n.parentNode && n.parentNode !== pm) n = n.parentNode
-    return (n && n.parentNode === pm) ? n : null
-  }
-
+  // Focus/reveal styling is done by the Presentation ProseMirror extension (via
+  // the focus/reveal/revealCount props on <Editor>) — external DOM edits get
+  // reverted by ProseMirror. Here we only handle typewriter scroll + reveal nav.
   function currentBlockIndex() {
-    const pm = visiblePM(), el = currentBlockEl()
-    return (pm && el) ? [...pm.children].indexOf(el) : 0
+    return editor ? editor.state.selection.$head.index(0) : 0
   }
 
   function scrollCaretToCenter() {
@@ -109,54 +97,30 @@
   }
 
   function scrollToBlock(i) {
-    const pm = visiblePM()
-    if (!pm || !scroller) return
-    const el = pm.children[i]
+    if (!editor || !scroller) return
+    const el = editor.view.dom.children[i]
     if (!el) return
     const rect = scroller.getBoundingClientRect()
     const y = el.getBoundingClientRect().top - rect.top + scroller.scrollTop
     scroller.scrollTo({ top: Math.max(0, y - scroller.clientHeight / 2 + el.offsetHeight / 2), behavior: 'smooth' })
   }
 
-  // Style each top-level block directly with inline opacity — no class/CSS
-  // matching to go wrong. Focus dims all but the caret's block; reveal hides
-  // everything past the frontier.
   function updatePresentation() {
-    const pm = visiblePM()
-    if (!pm) return
-    const kids = pm.children
-    const curEl = focusMode ? currentBlockEl() : null
-    for (let i = 0; i < kids.length; i++) {
-      const el = kids[i]
-      let op = ''
-      if (revealMode && i >= revealCount) op = '0'
-      else if (focusMode && el !== curEl) op = '0.28'
-      el.style.opacity = op
-      el.style.transition = 'opacity 0.3s ease'
-      el.style.pointerEvents = (revealMode && i >= revealCount) ? 'none' : ''
-    }
     if (typewriter) requestAnimationFrame(scrollCaretToCenter)
   }
 
   function toggleTypewriter() { typewriter = !typewriter; window.api.settings.set({ typewriter }); updatePresentation() }
-  function toggleFocus() {
-    focusMode = !focusMode
-    window.api.settings.set({ focusMode })
-    if (focusMode) editor?.commands.focus() // restore caret so the current block is detectable
-    updatePresentation()
-  }
+  function toggleFocus() { focusMode = !focusMode; window.api.settings.set({ focusMode }) }
   function toggleReveal() {
     revealMode = !revealMode
     if (revealMode) revealCount = Math.max(1, currentBlockIndex() + 1)
     window.api.settings.set({ revealMode })
-    updatePresentation()
   }
   function revealNext() {
     revealCount = Math.min(editor?.view.dom.children.length || 1, revealCount + 1)
-    updatePresentation()
     scrollToBlock(revealCount - 1)
   }
-  function revealPrev() { revealCount = Math.max(1, revealCount - 1); updatePresentation() }
+  function revealPrev() { revealCount = Math.max(1, revealCount - 1) }
 
   function scheduleAutosave() {
     if (!filePath) return
@@ -404,8 +368,8 @@
       onZoomIn={() => zoomBy(0.1)} onZoomOut={() => zoomBy(-0.1)} onZoomReset={zoomReset} />
   {/if}
 
-  <div class="editor-scroll" class:typewriter class:focus-mode={focusMode} class:reveal-mode={revealMode} bind:this={scroller}>
-    <Editor {onReady} {onChange} {onSelect} />
+  <div class="editor-scroll" class:typewriter bind:this={scroller}>
+    <Editor {onReady} {onChange} {onSelect} focus={focusMode} reveal={revealMode} {revealCount} />
   </div>
 
   <PresentationBar
