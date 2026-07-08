@@ -10,6 +10,7 @@
   import Highlight from '@tiptap/extension-highlight'
   import FontFamily from '@tiptap/extension-font-family'
   import { Presentation } from '../presentation-extension.js'
+  import { CustomTable, ResizableImage, TableRow, TableHeader, TableCell, handleImagePaste } from '../editor-extensions.js'
 
   export let content = null
   export let onReady = () => {}
@@ -34,10 +35,14 @@
         FontFamily,
         TextAlign.configure({ types: ['heading', 'paragraph'] }),
         Placeholder.configure({ placeholder: 'Start writing…' }),
-        Presentation
+        Presentation,
+        CustomTable.configure({ resizable: false }),
+        TableRow, TableHeader, TableCell,
+        ResizableImage
       ],
       content: content || '',
       autofocus: 'end',
+      editorProps: { handlePaste: (view, event) => handleImagePaste(view, event) },
       onUpdate: ({ transaction }) => { if (transaction.docChanged) onChange() },
       onSelectionUpdate: () => onSelect()
     })

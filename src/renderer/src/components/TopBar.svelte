@@ -42,11 +42,28 @@
   const clearFormat = () => { if (editor) editor.chain().focus().unsetAllMarks().clearNodes().unsetTextAlign().run() }
   const fileDo = (fn) => { showFile = false; fn() }
 
+  let showTable = false
+  let fileInput
+  const tableDo = (fn) => { showTable = false; if (editor) fn(editor.chain().focus()).run() }
+  const toggleBorders = () => {
+    showTable = false
+    if (!editor) return
+    const b = editor.getAttributes('table').borderless
+    editor.chain().focus().updateAttributes('table', { borderless: !b }).run()
+  }
+  function pickImage() { fileInput && fileInput.click() }
+  function onImageFile(e) {
+    const f = e.target.files && e.target.files[0]
+    if (f && editor) { const r = new FileReader(); r.onload = () => editor.chain().focus().setImage({ src: r.result }).run(); r.readAsDataURL(f) }
+    e.target.value = ''
+  }
+
   $: s = (bump, editor) ? {
     bold: editor?.isActive('bold'), italic: editor?.isActive('italic'),
     underline: editor?.isActive('underline'), strike: editor?.isActive('strike'),
     highlight: editor?.isActive('highlight'),
     h1: editor?.isActive('heading', { level: 1 }), h2: editor?.isActive('heading', { level: 2 }),
+    sub: editor?.isActive('heading', { level: 3 }),
     quote: editor?.isActive('blockquote'), bullet: editor?.isActive('bulletList'), ordered: editor?.isActive('orderedList'),
     left: editor?.isActive({ textAlign: 'left' }), center: editor?.isActive({ textAlign: 'center' })
   } : {}
@@ -118,6 +135,7 @@
     <span class="sep"></span>
     <button class:on={s.h1} on:click={cmd(c => c.toggleHeading({ level: 1 }))} title="Heading 1">H1</button>
     <button class:on={s.h2} on:click={cmd(c => c.toggleHeading({ level: 2 }))} title="Heading 2">H2</button>
+    <button class:on={s.sub} on:click={cmd(c => c.toggleHeading({ level: 3 }))} title="Subtitle (small)">Sub</button>
     <button class:on={s.quote} on:click={cmd(c => c.toggleBlockquote())} title="Quote">&ldquo;</button>
     <button class:on={s.bullet} on:click={cmd(c => c.toggleBulletList())} title="Bullet list">&bull;</button>
     <button class:on={s.ordered} on:click={cmd(c => c.toggleOrderedList())} title="Numbered list">1.</button>
@@ -125,7 +143,28 @@
     <button class:on={s.left} on:click={cmd(c => c.setTextAlign('left'))} title="Align left">&#8676;</button>
     <button class:on={s.center} on:click={cmd(c => c.setTextAlign('center'))} title="Align center">&#8677;</button>
     <span class="sep"></span>
+    <div class="tablewrap">
+      <button class:on={editor?.isActive('table')} on:click={() => showTable = !showTable} title="Table">TABLE</button>
+      {#if showTable}
+        <div class="menu">
+          <button on:click={() => tableDo(c => c.insertTable({ rows: 3, cols: 3, withHeaderRow: true }))}>Insert table</button>
+          <div class="menu-sep"></div>
+          <button on:click={() => tableDo(c => c.addRowAfter())}>Add row</button>
+          <button on:click={() => tableDo(c => c.addColumnAfter())}>Add column</button>
+          <button on:click={() => tableDo(c => c.deleteRow())}>Delete row</button>
+          <button on:click={() => tableDo(c => c.deleteColumn())}>Delete column</button>
+          <div class="menu-sep"></div>
+          <button on:click={toggleBorders}>Toggle borders</button>
+          <button on:click={() => tableDo(c => c.deleteTable())}>Delete table</button>
+        </div>
+      {/if}
+    </div>
+    <button on:click={pickImage} title="Insert image">
+      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+    </button>
+    <span class="sep"></span>
     <button on:click={clearFormat} title="Clear formatting — reset selection to the Style default">CLEAR</button>
+    <input type="file" accept="image/*" bind:this={fileInput} on:change={onImageFile} style="display:none" />
 
     <div class="zoom">
       <button on:click={onZoomOut} title="Zoom out (Ctrl -)">&minus;</button>
@@ -136,6 +175,7 @@
 </div>
 
 {#if showFile}<div class="scrim" on:click={() => showFile = false}></div>{/if}
+{#if showTable}<div class="scrim" on:click={() => showTable = false}></div>{/if}
 
 <style>
   .topbar {
@@ -180,7 +220,7 @@
   .zoom button { min-width: 1.7rem; padding: 0.25rem 0.4rem; }
   .zoom .zval { min-width: 3rem; font-variant-numeric: tabular-nums; }
 
-  .filewrap { position: relative; }
+  .filewrap, .tablewrap { position: relative; }
   .menu {
     position: absolute; top: 2.2rem; left: 0; z-index: 300;
     background: var(--surface); border: 1px solid var(--rule); border-radius: 10px;

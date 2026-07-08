@@ -61,8 +61,31 @@ body {
 }
 .ProseMirror h1 { font-size: calc(2.4rem * var(--font-scale)); font-weight: 700; }
 .ProseMirror h2 { font-size: calc(1.8rem * var(--font-scale)); font-weight: 700; }
-.ProseMirror h3 { font-size: calc(1.4rem * var(--font-scale)); font-weight: 600; }
+/* h3 is the "Subtitle" — smaller than body, muted, lightly tracked */
+.ProseMirror h3 {
+  font-size: calc(0.92rem * var(--font-scale)); font-weight: 600;
+  letter-spacing: 0.04em; color: var(--muted); line-height: 1.4; margin: 0.25rem 0 1rem;
+}
 .ProseMirror p { margin: 0 0 1.1rem; }
+
+/* Tables */
+.ProseMirror table { border-collapse: collapse; table-layout: fixed; width: 100%; margin: 1.2rem 0; }
+.ProseMirror td, .ProseMirror th { border: 1px solid var(--rule); padding: 0.4rem 0.6rem; vertical-align: top; position: relative; }
+.ProseMirror th { background: color-mix(in srgb, var(--muted) 14%, transparent); font-weight: 700; text-align: left; }
+.ProseMirror td > *, .ProseMirror th > * { margin-bottom: 0; }
+.ProseMirror table[data-borderless="true"] td, .ProseMirror table[data-borderless="true"] th { border-color: transparent; }
+.ProseMirror table[data-borderless="true"] th { background: transparent; }
+.ProseMirror .selectedCell::after { content: ''; position: absolute; inset: 0; background: var(--selection); pointer-events: none; }
+
+/* Images */
+.ProseMirror .img-wrap { position: relative; display: inline-block; line-height: 0; max-width: 100%; }
+.ProseMirror .img-wrap img { max-width: 100%; height: auto; border-radius: 5px; display: block; }
+.ProseMirror .img-resize {
+  position: absolute; right: -5px; bottom: -5px; width: 14px; height: 14px;
+  background: var(--accent); border: 2px solid var(--surface); border-radius: 50%;
+  cursor: nwse-resize; opacity: 0; transition: opacity 0.15s;
+}
+.ProseMirror .img-wrap:hover .img-resize { opacity: 1; }
 
 .ProseMirror blockquote {
   border-left: 3px solid var(--accent);
@@ -129,8 +152,10 @@ body {
   .ProseMirror { font-size: 11pt !important; line-height: 1.5 !important; color: var(--text) !important; }
   .ProseMirror h1 { font-size: 2em !important; }
   .ProseMirror h2 { font-size: 1.5em !important; }
-  .ProseMirror h3 { font-size: 1.2em !important; }
+  .ProseMirror h3 { font-size: 0.85em !important; }
   .ProseMirror h1, .ProseMirror h2, .ProseMirror h3 { break-after: avoid; }
+  .ProseMirror .img-resize { display: none !important; }
+  .ProseMirror table, .ProseMirror img, .ProseMirror tr { break-inside: avoid; }
   .ProseMirror p, .ProseMirror li, .ProseMirror blockquote { orphans: 2; widows: 2; }
   .ProseMirror .lw-dim, .ProseMirror .lw-hidden { opacity: 1 !important; }
 
