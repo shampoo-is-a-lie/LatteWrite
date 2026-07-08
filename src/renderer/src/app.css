@@ -131,9 +131,12 @@ body {
   .ProseMirror p, .ProseMirror li, .ProseMirror blockquote { orphans: 2; widows: 2; }
   .ProseMirror .lw-dim, .ProseMirror .lw-hidden { opacity: 1 !important; }
 
-  /* "Plain" PDF: white paper + dark ink, but keep the current Style's fonts. */
+  /* "Plain" PDF: white paper + dark ink, but keep the current Style's fonts.
+     !important is required — applyStyle() sets these vars inline on :root, and a
+     normal stylesheet rule can't override an inline declaration. */
   :root[data-print="plain"] {
-    --bg: #ffffff; --surface: #ffffff; --text: #1a1a1a; --muted: #555555;
-    --accent: #333333; --rule: #cccccc; --selection: transparent; --caret: #1a1a1a;
+    --bg: #ffffff !important; --surface: #ffffff !important; --text: #1a1a1a !important;
+    --muted: #555555 !important; --accent: #333333 !important; --rule: #cccccc !important;
+    --selection: transparent !important; --caret: #1a1a1a !important;
   }
 }
