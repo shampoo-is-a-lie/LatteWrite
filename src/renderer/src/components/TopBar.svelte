@@ -44,7 +44,13 @@
 
   let showTable = false
   let fileInput
+  let hr = 0, hc = 0 // hovered rows/cols in the size grid
+  const GRID = [1, 2, 3, 4, 5, 6, 7, 8]
   const tableDo = (fn) => { showTable = false; if (editor) fn(editor.chain().focus()).run() }
+  function insertTableSize(rows, cols) {
+    showTable = false; hr = 0; hc = 0
+    if (editor) editor.chain().focus().insertTable({ rows, cols, withHeaderRow: true }).run()
+  }
   const toggleBorders = () => {
     showTable = false
     if (!editor) return
@@ -146,8 +152,19 @@
     <div class="tablewrap">
       <button class:on={editor?.isActive('table')} on:click={() => showTable = !showTable} title="Table">TABLE</button>
       {#if showTable}
-        <div class="menu">
-          <button on:click={() => tableDo(c => c.insertTable({ rows: 3, cols: 3, withHeaderRow: true }))}>Insert table</button>
+        <div class="menu tablemenu">
+          <div class="grid-label">{hc && hr ? `${hc} × ${hr}` : 'Insert table'}</div>
+          <div class="grid-pick" on:mouseleave={() => { hr = 0; hc = 0 }}>
+            {#each GRID as r}
+              <div class="grid-row">
+                {#each GRID as c}
+                  <div class="grid-cell" class:hot={c <= hc && r <= hr}
+                    on:mouseenter={() => { hc = c; hr = r }}
+                    on:click={() => insertTableSize(r, c)}></div>
+                {/each}
+              </div>
+            {/each}
+          </div>
           <div class="menu-sep"></div>
           <button on:click={() => tableDo(c => c.addRowAfter())}>Add row</button>
           <button on:click={() => tableDo(c => c.addColumnAfter())}>Add column</button>
@@ -229,6 +246,12 @@
   }
   .menu button { text-align: left; }
   .menu-sep { height: 1px; background: var(--rule); margin: 0.3rem 0.2rem; }
+  .tablemenu { min-width: auto; }
+  .grid-label { font-size: 0.72rem; color: var(--muted); text-align: center; padding: 0.2rem 0 0.4rem; letter-spacing: 0.04em; }
+  .grid-pick { display: flex; flex-direction: column; gap: 3px; padding: 0.1rem 0.3rem 0.3rem; }
+  .grid-row { display: flex; gap: 3px; }
+  .grid-cell { width: 17px; height: 17px; border: 1px solid var(--rule); border-radius: 3px; cursor: pointer; background: var(--bg); }
+  .grid-cell.hot { background: var(--accent); border-color: var(--accent); }
   .scrim { position: fixed; inset: 0; z-index: 250; }
 
   .winctl { display: flex; align-items: center; gap: 0.15rem; margin-left: 0.5rem; }
