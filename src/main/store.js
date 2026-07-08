@@ -17,6 +17,8 @@ const store = new Store({
     // Appearance
     style: 'Espresso',
     fontScale: 1,
+    fontHeading: '', // Google font override; '' = use the Style's font
+    fontBody: '',
 
     // Editing
     currentFile: '',

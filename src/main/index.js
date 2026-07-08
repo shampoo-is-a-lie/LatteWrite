@@ -8,6 +8,7 @@ import { syncBundle as onedriveSync } from './onedrive.js'
 import { readBundle } from './bundle.js'
 import { saveDocument } from './autosave.js'
 import { exportHTML, exportMarkdown, exportDocx } from './export.js'
+import { loadFontCss } from './fonts.js'
 
 const FILTERS = [{ name: 'LatteWrite', extensions: ['latte'] }]
 
@@ -153,6 +154,9 @@ ipcMain.handle('export:docx', async (_e, payload) => {
   const out = await pickExportPath(payload.meta?.title || 'Untitled', 'docx')
   return out ? exportDocx(out, payload) : null
 })
+
+// ── Fonts ─────────────────────────────────────────────────────────────────────
+ipcMain.handle('fonts:load', (_e, family) => loadFontCss(family))
 
 // ── Window ────────────────────────────────────────────────────────────────────
 ipcMain.handle('window:presentation', () => {

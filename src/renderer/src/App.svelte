@@ -8,6 +8,7 @@
   import { applyStyle } from './theme.js'
   import { STYLES } from './styles.js'
   import { createDictation } from './dictation.js'
+  import { applyFont } from './fonts.js'
 
   let settings = {}
   let editor = null
@@ -17,6 +18,8 @@
   let title = 'Untitled'
   let style = 'Espresso'
   let fontScale = 1
+  let fontHeading = ''
+  let fontBody = ''
 
   let saving = false
   let dirty = false
@@ -82,6 +85,7 @@
     if (meta.style && STYLES[meta.style]) style = meta.style
     fontScale = meta.fontScale || 1
     applyStyle(style, fontScale)
+    refreshFonts()
     dirty = false
     computeTitle()
   }
@@ -98,7 +102,26 @@
   function pickStyle(name) {
     style = name
     applyStyle(style, fontScale)
+    refreshFonts()
     window.api.settings.set({ style })
+  }
+
+  // Re-apply any Google-font overrides on top of the current Style's fonts.
+  function refreshFonts() {
+    if (fontHeading) applyFont('heading', fontHeading)
+    if (fontBody) applyFont('body', fontBody)
+  }
+
+  async function setFont(kind, family) {
+    if (kind === 'heading') fontHeading = family
+    else fontBody = family
+    await window.api.settings.set(kind === 'heading' ? { fontHeading: family } : { fontBody: family })
+    if (family) {
+      await applyFont(kind, family)
+    } else {
+      applyStyle(style, fontScale) // cleared → back to Style defaults, then re-apply the other override
+      refreshFonts()
+    }
   }
 
   async function exportAs(kind) {
@@ -239,7 +262,10 @@
     settings = await window.api.settings.get()
     style = settings.style || 'Espresso'
     fontScale = settings.fontScale || 1
+    fontHeading = settings.fontHeading || ''
+    fontBody = settings.fontBody || ''
     applyStyle(style, fontScale)
+    refreshFonts()
     connected = await window.api.auth.status()
     window.api.window.onFullscreen(v => { fullscreen = v; chromeHidden = v })
     window.addEventListener('keydown', onKey)
@@ -267,7 +293,8 @@
     <StylePicker current={style} onPick={pickStyle} onClose={() => showStyles = false} />
   {/if}
   {#if showSettings}
-    <Settings {settings} {connected} inputs={audioInputs} onPatch={patchSettings}
+    <Settings {settings} {connected} inputs={audioInputs} {fontHeading} {fontBody}
+      onPatch={patchSettings} onSetFont={setFont}
       onConnect={connectDrive} onDisconnect={disconnectDrive} onClose={() => showSettings = false} />
   {/if}
 </div>

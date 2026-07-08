@@ -26,6 +26,9 @@ contextBridge.exposeInMainWorld('api', {
     markdown: (payload) => ipcRenderer.invoke('export:markdown', payload),
     docx: (payload) => ipcRenderer.invoke('export:docx', payload)
   },
+  fonts: {
+    load: (family) => ipcRenderer.invoke('fonts:load', family)
+  },
   window: {
     togglePresentation: () => ipcRenderer.invoke('window:presentation'),
     onFullscreen: (cb) => {

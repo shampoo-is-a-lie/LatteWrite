@@ -1,8 +1,12 @@
 <script>
+  import { GOOGLE_FONTS } from '../googlefonts.js'
   export let settings = {}
   export let connected = false
   export let inputs = []
+  export let fontHeading = ''
+  export let fontBody = ''
   export let onPatch = () => {}
+  export let onSetFont = () => {}
   export let onConnect = () => {}
   export let onDisconnect = () => {}
   export let onClose = () => {}
@@ -15,6 +19,8 @@
   let whisperModel = settings.whisperModel || 'onnx-community/whisper-base.en'
   let audioDeviceId = settings.audioDeviceId || ''
   let backupsToKeep = settings.backupsToKeep ?? 10
+  let fh = fontHeading
+  let fb = fontBody
 
   function apply() {
     onPatch({ oauthClientId: clientId, oauthClientSecret: clientSecret, syncProvider, syncOnSave, dictationEngine, whisperModel, audioDeviceId, backupsToKeep: Number(backupsToKeep) })
@@ -62,6 +68,22 @@
 <div class="scrim" on:click={onClose}></div>
 <div class="panel">
   <h2>SETTINGS</h2>
+
+  <section>
+    <h3>FONTS</h3>
+    <label class="field">
+      <span>Heading font</span>
+      <input list="gfonts" bind:value={fh} on:change={() => onSetFont('heading', fh.trim())} placeholder="Style default" />
+    </label>
+    <label class="field">
+      <span>Body font</span>
+      <input list="gfonts" bind:value={fb} on:change={() => onSetFont('body', fb.trim())} placeholder="Style default" />
+    </label>
+    <datalist id="gfonts">
+      {#each GOOGLE_FONTS as f}<option value={f}></option>{/each}
+    </datalist>
+    <p class="note">Any Google font — start typing to search, or paste any family name. Downloaded once and cached for offline use. Clear the field to use the Style's own font.</p>
+  </section>
 
   <section>
     <h3>DICTATION</h3>
