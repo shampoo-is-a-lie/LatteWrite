@@ -64,9 +64,15 @@
   }
 
   const pathD = (s) => 'M ' + s.points.map(p => `${p.x} ${p.y}`).join(' L ')
+  const arrowLen = (s) => 10 + s.width * 1.6
   function arrowHead(s) {
-    const a = Math.atan2(s.y2 - s.y1, s.x2 - s.x1), L = 10 + s.width * 1.6, w = 0.5
+    const a = Math.atan2(s.y2 - s.y1, s.x2 - s.x1), L = arrowLen(s), w = 0.5
     return `${s.x2},${s.y2} ${s.x2 - L * Math.cos(a - w)},${s.y2 - L * Math.sin(a - w)} ${s.x2 - L * Math.cos(a + w)},${s.y2 - L * Math.sin(a + w)}`
+  }
+  // End the shaft at the arrowhead's base so the round cap doesn't poke past the tip.
+  function arrowBase(s) {
+    const a = Math.atan2(s.y2 - s.y1, s.x2 - s.x1), d = arrowLen(s) * Math.cos(0.5)
+    return { x: s.x2 - d * Math.cos(a), y: s.y2 - d * Math.sin(a) }
   }
 
   function undo() { if (shapes.length) { shapes = shapes.slice(0, -1); dispatch('change') } }
@@ -81,8 +87,9 @@
     {:else if s.type === 'line'}
       <line x1={s.x1} y1={s.y1} x2={s.x2} y2={s.y2} stroke={s.color} stroke-width={s.width} stroke-linecap="round" />
     {:else if s.type === 'arrow'}
-      <line x1={s.x1} y1={s.y1} x2={s.x2} y2={s.y2} stroke={s.color} stroke-width={s.width} stroke-linecap="round" />
-      <polygon points={arrowHead(s)} fill={s.color} />
+      {@const b = arrowBase(s)}
+      <line x1={s.x1} y1={s.y1} x2={b.x} y2={b.y} stroke={s.color} stroke-width={s.width} stroke-linecap="round" />
+      <polygon points={arrowHead(s)} fill={s.color} stroke={s.color} stroke-width={s.width} stroke-linejoin="round" />
     {:else if s.type === 'rect'}
       <rect x={s.x} y={s.y} width={s.w} height={s.h} stroke={s.color} stroke-width={s.width} fill="none" />
     {:else if s.type === 'ellipse'}
