@@ -82,7 +82,6 @@
 
     <button on:click={onStyles}>STYLE</button>
     <button on:click={onSettings}>SETTINGS</button>
-    <button class="present" on:click={onPresent}>PRESENT</button>
     <div class="winctl">
       <button class="wc" on:click={onMinimize} title="Minimize">
         <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>
