@@ -1,6 +1,7 @@
 <script>
   import Select from './Select.svelte'
   import FontPicker from './FontPicker.svelte'
+  import ConfirmDialog from './ConfirmDialog.svelte'
   import { fontStack } from '../fonts.js'
   export let settings = {}
   export let connected = false
@@ -147,12 +148,13 @@
   let fontModal = null // 'heading' | 'body' | null
 
   let backupMsg = ''
+  let confirmRestore = false
   async function doBackup() {
     const p = await window.api.backup.create()
     backupMsg = p ? 'Backup saved to ' + p : ''
   }
-  async function doRestore() {
-    if (!confirm('Restore will replace ALL current settings, custom styles and cached fonts with the backup, then restart LatteWrite. Continue?')) return
+  async function reallyRestore() {
+    confirmRestore = false
     await window.api.backup.restore()
   }
 
@@ -336,13 +338,21 @@
         <p class="note">Save all settings, custom styles and cached fonts as a single .zip — or restore everything from one (this replaces current data and restarts the app).</p>
         <div class="row">
           <button class="solid" on:click={doBackup}>BACK UP (.ZIP)</button>
-          <button class="solid" on:click={doRestore}>RESTORE…</button>
+          <button class="solid" on:click={() => confirmRestore = true}>RESTORE…</button>
         </div>
         {#if backupMsg}<p class="note">{backupMsg}</p>{/if}
       </section>
     </div>
   </div>
 </div>
+
+{#if confirmRestore}
+  <ConfirmDialog
+    title="Restore backup"
+    message="This replaces ALL current settings, custom styles and cached fonts with the backup, then restarts LatteWrite. This cannot be undone."
+    confirmLabel="RESTORE & RESTART" danger
+    onConfirm={reallyRestore} onCancel={() => confirmRestore = false} />
+{/if}
 
 {#if fontModal}
   <FontPicker
