@@ -124,12 +124,12 @@ ipcMain.handle('doc:openPath', (_e, filePath) => openPath(filePath))
 
 function openPath(filePath) {
   if (!fs.existsSync(filePath)) return null
-  const { doc, meta } = readBundle(filePath)
+  const { doc, meta, versions } = readBundle(filePath)
   addRecent(filePath)
-  return { filePath, doc, meta }
+  return { filePath, doc, meta, versions }
 }
 
-ipcMain.handle('doc:save', async (_e, { filePath, doc, meta }) => {
+ipcMain.handle('doc:save', async (_e, { filePath, doc, meta, versions }) => {
   let target = filePath
   if (!target) {
     const res = await dialog.showSaveDialog(mainWindow, {
@@ -139,7 +139,7 @@ ipcMain.handle('doc:save', async (_e, { filePath, doc, meta }) => {
     if (res.canceled || !res.filePath) return null
     target = res.filePath
   }
-  saveDocument(target, { doc, meta }, store.get('backupsToKeep'))
+  saveDocument(target, { doc, meta, versions }, store.get('backupsToKeep'))
   addRecent(target)
 
   if (store.get('syncOnSave')) { try { await syncCurrent(target) } catch { /* surfaced via sync:now */ } }

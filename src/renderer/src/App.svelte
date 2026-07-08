@@ -8,6 +8,7 @@
   import ContextMenu from './components/ContextMenu.svelte'
   import ConfirmDialog from './components/ConfirmDialog.svelte'
   import Drawing from './components/Drawing.svelte'
+  import VersionHistory from './components/VersionHistory.svelte'
   import { applyStyle } from './theme.js'
   import { STYLES, isBuiltin, cloneStyle } from './styles.js'
   import { fontStack, ensureFontLoaded } from './fonts.js'
@@ -48,7 +49,38 @@
   let drawings = []
   let dialog = null  // themed alert/confirm
 
+  // Version history — one snapshot per day (the day's final content), newest 10.
+  let versions = []
+  let lastSaveDate = null
+  let lastSaveDoc = null
+  let showVersions = false
+
+  const ymd = (t = Date.now()) => {
+    const d = new Date(t), p = (n) => String(n).padStart(2, '0')
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+  }
+  function upsertVersion(date, doc) {
+    versions = [{ date, savedAt: Date.now(), doc }, ...versions.filter(v => v.date !== date)]
+      .sort((a, b) => (a.date < b.date ? 1 : -1))
+      .slice(0, 10)
+  }
+
   function onDrawChange() { dirty = true; scheduleAutosave() }
+
+  function restoreVersion(v) {
+    showConfirm({
+      title: 'Restore version', danger: true, confirmLabel: 'RESTORE',
+      message: `Replace the current document with the version from ${v.date}? The current content will be replaced.`,
+      onConfirm: () => { editor.commands.setContent(v.doc || ''); dirty = true; showVersions = false; saveNow(false) }
+    })
+  }
+  function deleteVersion(v) {
+    showConfirm({
+      title: 'Delete version', danger: true, confirmLabel: 'DELETE',
+      message: `Delete the saved version from ${v.date}?`,
+      onConfirm: () => { versions = versions.filter(x => x.date !== v.date); saveNow(false) }
+    })
+  }
 
   function showAlert(title, message) {
     dialog = { title, message, confirmLabel: 'OK', cancelLabel: '', danger: false, onConfirm: () => dialog = null }
@@ -119,8 +151,9 @@
   async function createDraft() {
     if (filePath || creatingDraft || !editor) return
     creatingDraft = true
-    const res = await window.api.doc.autoNew({ doc: editor.getJSON(), meta: buildMeta() })
-    if (res) { filePath = res.filePath; dirty = false }
+    const doc = editor.getJSON()
+    const res = await window.api.doc.autoNew({ doc, meta: { ...buildMeta(), savedDate: ymd() } })
+    if (res) { filePath = res.filePath; dirty = false; versions = []; lastSaveDate = ymd(); lastSaveDoc = doc }
     creatingDraft = false
     scheduleAutosave()
   }
@@ -188,8 +221,14 @@
         if (r) filePath = r.filePath
       }
     }
-    const res = await window.api.doc.save({ filePath, doc: editor.getJSON(), meta: buildMeta() })
+    const today = ymd()
+    const curDoc = editor.getJSON()
+    // First save of a new day → freeze the previous day's final content.
+    if (lastSaveDate && lastSaveDate !== today && lastSaveDoc) upsertVersion(lastSaveDate, lastSaveDoc)
+    const res = await window.api.doc.save({ filePath, doc: curDoc, meta: { ...buildMeta(), savedDate: today }, versions })
     if (res) { filePath = res.filePath; dirty = false; computeTitle() }
+    lastSaveDate = today
+    lastSaveDoc = curDoc
     saving = false
   }
 
@@ -211,6 +250,9 @@
     if (meta.style && (STYLES[meta.style] || customStyles[meta.style])) style = meta.style
     fontScale = meta.fontScale || 1
     drawings = meta.drawings || []
+    versions = res.versions || []
+    lastSaveDate = meta.savedDate || null
+    lastSaveDoc = res.doc
     applyCurrent()
     dirty = false
     titleManual = !!meta.titleManual
@@ -226,6 +268,9 @@
     dirty = false
     titleManual = false
     drawings = []
+    versions = []
+    lastSaveDate = null
+    lastSaveDoc = null
     computeTitle()
   }
 
@@ -499,7 +544,8 @@
       onSettings={openSettings} onPresent={toggleFullscreen}
       onZoomIn={() => zoomBy(0.1)} onZoomOut={() => zoomBy(-0.1)} onZoomReset={zoomReset}
       onMinimize={winMin} onMaximize={winMax} onClose={winClose} onRename={commitTitle}
-      onOpenDoc={openByPath} drawing={drawMode} onDraw={() => drawMode = !drawMode} />
+      onOpenDoc={openByPath} drawing={drawMode} onDraw={() => drawMode = !drawMode}
+      onVersions={() => showVersions = true} />
   {/if}
 
   <div class="editor-scroll" class:typewriter bind:this={scroller}>
@@ -532,6 +578,10 @@
   {/if}
 
   <ContextMenu />
+
+  {#if showVersions}
+    <VersionHistory {versions} onRestore={restoreVersion} onDelete={deleteVersion} onClose={() => showVersions = false} />
+  {/if}
 
   {#if dialog}
     <ConfirmDialog title={dialog.title} message={dialog.message}

@@ -22,6 +22,7 @@
   export let onClose = () => {}
   export let onRename = () => {}
   export let onOpenDoc = () => {}
+  export let onVersions = () => {}
   export let drawing = false
   export let onDraw = () => {}
 
@@ -86,6 +87,7 @@
           <button on:click={() => fileDo(onNew)}>New</button>
           <button on:click={() => fileDo(onOpen)}>Open…</button>
           <button on:click={() => fileDo(onSave)}>{saving ? 'Saving…' : 'Save'}</button>
+          <button on:click={() => fileDo(onVersions)}>Version history…</button>
           <div class="menu-sep"></div>
           <button on:click={() => fileDo(() => onExport('pdf'))}>Export PDF — current style</button>
           <button on:click={() => fileDo(() => onExport('pdfPlain'))}>Export PDF — plain (white)</button>
