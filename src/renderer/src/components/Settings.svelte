@@ -62,6 +62,56 @@
   ]
   $: micOpts = [{ value: '', label: 'System default' }, ...inputs.map(d => ({ value: d.deviceId, label: d.label }))]
 
+  let shortcutQuery = ''
+  const SHORTCUTS = [
+    { group: 'File', items: [
+      { keys: 'Ctrl N', desc: 'New document' },
+      { keys: 'Ctrl O', desc: 'Open a document' },
+      { keys: 'Ctrl S', desc: 'Save' }
+    ] },
+    { group: 'Text', items: [
+      { keys: 'Ctrl B', desc: 'Bold' },
+      { keys: 'Ctrl I', desc: 'Italic' },
+      { keys: 'Ctrl U', desc: 'Underline' },
+      { keys: 'Ctrl Shift X', desc: 'Strikethrough' }
+    ] },
+    { group: 'Paragraph', items: [
+      { keys: 'Ctrl Alt 1', desc: 'Heading 1' },
+      { keys: 'Ctrl Alt 2', desc: 'Heading 2' },
+      { keys: 'Ctrl Alt 3', desc: 'Heading 3' },
+      { keys: 'Ctrl Shift 7', desc: 'Numbered list' },
+      { keys: 'Ctrl Shift 8', desc: 'Bullet list' },
+      { keys: 'Ctrl Shift B', desc: 'Quote (blockquote)' },
+      { keys: 'Ctrl Alt C', desc: 'Code block' },
+      { keys: 'Ctrl Shift L', desc: 'Align left' },
+      { keys: 'Ctrl Shift E', desc: 'Align center' },
+      { keys: 'Ctrl Shift R', desc: 'Align right' },
+      { keys: 'Ctrl Shift J', desc: 'Justify' }
+    ] },
+    { group: 'Editing', items: [
+      { keys: 'Ctrl Z', desc: 'Undo' },
+      { keys: 'Ctrl Shift Z', desc: 'Redo' },
+      { keys: 'Ctrl D', desc: 'Dictate (toggle)' }
+    ] },
+    { group: 'View', items: [
+      { keys: 'Ctrl +', desc: 'Zoom in' },
+      { keys: 'Ctrl -', desc: 'Zoom out' },
+      { keys: 'Ctrl 0', desc: 'Reset zoom' }
+    ] },
+    { group: 'Presentation', items: [
+      { keys: 'Ctrl Shift P', desc: 'Toggle fullscreen (present)' },
+      { keys: 'Ctrl Shift H', desc: 'Hide / show the interface' },
+      { keys: 'Page Down', desc: 'Reveal next paragraph (Script mode)' },
+      { keys: 'Page Up', desc: 'Reveal previous paragraph (Script mode)' }
+    ] }
+  ]
+  $: scGroups = (() => {
+    const q = shortcutQuery.trim().toLowerCase()
+    return SHORTCUTS
+      .map(g => ({ group: g.group, items: g.items.filter(i => !q || i.desc.toLowerCase().includes(q) || i.keys.toLowerCase().includes(q)) }))
+      .filter(g => g.items.length)
+  })()
+
   function apply() {
     onPatch({ oauthClientId: clientId, oauthClientSecret: clientSecret, syncProvider, syncOnSave, dictationEngine, whisperModel, audioDeviceId, backupsToKeep: Number(backupsToKeep) })
   }
@@ -126,6 +176,9 @@
       </button>
       <button class="cp-rail-item" class:active={pane === 'editor'} on:click={() => pane = 'editor'}>
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg><span>Editor</span>
+      </button>
+      <button class="cp-rail-item" class:active={pane === 'shortcuts'} on:click={() => pane = 'shortcuts'}>
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><line x1="6" y1="10" x2="6" y2="10"/><line x1="10" y1="10" x2="10" y2="10"/><line x1="14" y1="10" x2="14" y2="10"/><line x1="18" y1="10" x2="18" y2="10"/><line x1="8" y1="14" x2="16" y2="14"/></svg><span>Shortcuts</span>
       </button>
       <button class="cp-rail-item" class:active={pane === 'sync'} on:click={() => pane = 'sync'}>
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg><span>Cloud Sync</span>
@@ -220,6 +273,22 @@
     <p class="note">Right-click an underlined word for suggestions and "Add to dictionary".</p>
   </section>
 
+      <section class="cp-pane" class:active={pane === 'shortcuts'}>
+        <div class="cp-pane-title">Keyboard Shortcuts</div>
+        <input class="sc-search" type="text" placeholder="Search shortcuts…" bind:value={shortcutQuery} />
+        {#each scGroups as g}
+          <div class="sc-group">{g.group}</div>
+          {#each g.items as it}
+            <div class="sc-row">
+              <span class="sc-desc">{it.desc}</span>
+              <span class="sc-keys">{#each it.keys.split(' ') as k}<kbd>{k}</kbd>{/each}</span>
+            </div>
+          {/each}
+        {:else}
+          <p class="note">No shortcuts match "{shortcutQuery}".</p>
+        {/each}
+      </section>
+
       <section class="cp-pane" class:active={pane === 'sync'}>
         <div class="cp-pane-title">Cloud Sync</div>
     <div class="field">
@@ -297,6 +366,17 @@
   .tworow { display: flex; gap: 1rem; align-items: flex-end; margin-top: 0.7rem; }
   .tworow .field { flex: 1; margin-bottom: 0; }
   .darkcheck { margin-bottom: 0.5rem; white-space: nowrap; }
+  .sc-search { margin-bottom: 0.8rem; }
+  .sc-group { font-size: 0.7rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin: 1rem 0 0.4rem; }
+  .sc-group:first-of-type { margin-top: 0.2rem; }
+  .sc-row { display: flex; align-items: center; gap: 1rem; padding: 0.4rem 0.2rem; border-bottom: 1px solid color-mix(in srgb, var(--rule) 50%, transparent); }
+  .sc-desc { flex: 1; font-size: 0.88rem; color: var(--text); }
+  .sc-keys { display: flex; gap: 0.25rem; flex: none; }
+  .sc-keys kbd {
+    font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; color: var(--text);
+    background: var(--bg); border: 1px solid var(--rule); border-bottom-width: 2px;
+    border-radius: 5px; padding: 0.15rem 0.4rem; min-width: 1.1rem; text-align: center;
+  }
   .meter { flex: 1; height: 10px; background: var(--bg); border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; }
   .meter-fill { height: 100%; background: var(--accent); transition: width 0.06s linear; }
   .creds { margin-top: 0.5rem; }
