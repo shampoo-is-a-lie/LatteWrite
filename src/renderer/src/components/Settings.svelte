@@ -1,6 +1,7 @@
 <script>
-  import { GOOGLE_FONTS } from '../googlefonts.js'
   import Select from './Select.svelte'
+  import FontPicker from './FontPicker.svelte'
+  import { fontStack } from '../fonts.js'
   export let settings = {}
   export let connected = false
   export let inputs = []
@@ -143,6 +144,7 @@
   }
 
   let pane = 'style'
+  let fontModal = null // 'heading' | 'body' | null
 
   let gpuMsg = ''
   async function testGpu() {
@@ -194,15 +196,14 @@
         <p class="editing">Editing <b>{editingLabel}</b></p>
 
         <div class="subhead">Fonts</div>
-    <label class="field">
+    <div class="field">
       <span>Heading font</span>
-      <input list="gfonts" bind:value={fh} on:change={() => onSetFont('heading', fh)} placeholder="Style default" />
-    </label>
-    <label class="field">
+      <button class="fontbtn" style={fh ? `font-family:${fontStack(fh)}` : ''} on:click={() => fontModal = 'heading'}>{fh || 'Style default'}</button>
+    </div>
+    <div class="field">
       <span>Body font</span>
-      <input list="gfonts" bind:value={fb} on:change={() => onSetFont('body', fb)} placeholder="Style default" />
-    </label>
-    <datalist id="gfonts">{#each GOOGLE_FONTS as f}<option value={f}></option>{/each}</datalist>
+      <button class="fontbtn" style={fb ? `font-family:${fontStack(fb)}` : ''} on:click={() => fontModal = 'body'}>{fb || 'Style default'}</button>
+    </div>
 
     <div class="subhead">Colours</div>
     <div class="swatches">
@@ -325,6 +326,14 @@
   </div>
 </div>
 
+{#if fontModal}
+  <FontPicker
+    title={fontModal === 'heading' ? 'Heading font' : 'Body font'}
+    current={fontModal === 'heading' ? fh : fb}
+    onPick={(f) => onSetFont(fontModal, f)}
+    onClose={() => fontModal = null} />
+{/if}
+
 <style>
   .scrim { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 500; }
   .panel {
@@ -354,6 +363,12 @@
     background: var(--bg); color: var(--text); border: 1px solid var(--rule);
     border-radius: 8px; padding: 0.55rem 0.7rem; font-family: var(--font-ui); font-size: 0.9rem;
   }
+  .fontbtn {
+    width: 100%; text-align: left; background: var(--bg); color: var(--text);
+    border: 1px solid var(--rule); border-radius: 8px; padding: 0.55rem 0.75rem;
+    font-size: 1.05rem; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .fontbtn:hover { border-color: var(--accent); }
   .check { display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem; color: var(--text); margin-bottom: 0.7rem; }
   .note { font-size: 0.75rem; color: var(--muted); margin: 0.2rem 0 0; line-height: 1.4; }
   .editing { font-size: 0.8rem; color: var(--muted); margin: 0 0 0.7rem; }

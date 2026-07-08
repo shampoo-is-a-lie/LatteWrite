@@ -24,9 +24,11 @@ export function isBundled(family) {
 // Ensure a family's @font-face is present in the document (no-op for bundled).
 export async function ensureFontLoaded(family) {
   if (!family || BUNDLED.has(family)) return
-  const css = await window.api.fonts.load(family)
-  const id = 'gf-' + family.replace(/[^a-z0-9]+/gi, '-').toLowerCase()
-  let el = document.getElementById(id)
-  if (!el) { el = document.createElement('style'); el.id = id; document.head.appendChild(el) }
-  el.textContent = css
+  try {
+    const css = await window.api.fonts.load(family)
+    const id = 'gf-' + family.replace(/[^a-z0-9]+/gi, '-').toLowerCase()
+    let el = document.getElementById(id)
+    if (!el) { el = document.createElement('style'); el.id = id; document.head.appendChild(el) }
+    el.textContent = css
+  } catch { /* invalid/offline family — falls back to the generic stack */ }
 }
