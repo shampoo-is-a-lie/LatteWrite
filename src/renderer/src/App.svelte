@@ -82,10 +82,10 @@
   // ── Presentation modes ──────────────────────────────────────────────────────
   function currentBlockEl() {
     const { view, state } = editor
-    let dom = view.domAtPos(state.selection.head).node
-    if (dom.nodeType === 3) dom = dom.parentElement
-    while (dom && dom.parentElement && dom.parentElement !== view.dom) dom = dom.parentElement
-    return (dom && dom.parentElement === view.dom) ? dom : null
+    const $head = state.selection.$head
+    const pos = $head.depth ? $head.before(1) : $head.pos
+    const node = view.nodeDOM(pos)
+    return node && node.nodeType === 1 ? node : null
   }
 
   function currentBlockIndex() {
