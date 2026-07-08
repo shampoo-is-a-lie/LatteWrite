@@ -60,7 +60,8 @@
           <button on:click={() => fileDo(onOpen)}>Open…</button>
           <button on:click={() => fileDo(onSave)}>{saving ? 'Saving…' : 'Save'}</button>
           <div class="menu-sep"></div>
-          <button on:click={() => fileDo(() => onExport('pdf'))}>Export PDF</button>
+          <button on:click={() => fileDo(() => onExport('pdf'))}>Export PDF — current style</button>
+          <button on:click={() => fileDo(() => onExport('pdfPlain'))}>Export PDF — plain (white)</button>
           <button on:click={() => fileDo(() => onExport('docx'))}>Export DOCX</button>
           <button on:click={() => fileDo(() => onExport('html'))}>Export HTML</button>
           <button on:click={() => fileDo(() => onExport('markdown'))}>Export Markdown</button>

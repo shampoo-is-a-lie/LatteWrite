@@ -108,3 +108,32 @@ body {
    them). Focus dims non-caret blocks; reveal hides blocks past the frontier. */
 .ProseMirror .lw-dim { opacity: 0.28; transition: opacity 0.3s ease; }
 .ProseMirror .lw-hidden { opacity: 0; transition: opacity 0.4s ease; pointer-events: none; }
+
+/* ── PDF export (printToPDF applies @media print) ───────────────────────────── */
+@media print {
+  @page { size: A4; margin: 2cm; }
+  html, body {
+    height: auto !important; overflow: visible !important;
+    background: var(--bg) !important; color: var(--text) !important;
+  }
+  .topbar, .pbar { display: none !important; }
+  .app-shell, .editor-scroll {
+    display: block !important; height: auto !important; overflow: visible !important;
+    background: var(--bg) !important;
+  }
+  .editor-scroll.typewriter .editor-page,
+  .editor-page { max-width: none !important; margin: 0 !important; padding: 0 !important; }
+  .ProseMirror { font-size: 11pt !important; line-height: 1.5 !important; color: var(--text) !important; }
+  .ProseMirror h1 { font-size: 2em !important; }
+  .ProseMirror h2 { font-size: 1.5em !important; }
+  .ProseMirror h3 { font-size: 1.2em !important; }
+  .ProseMirror h1, .ProseMirror h2, .ProseMirror h3 { break-after: avoid; }
+  .ProseMirror p, .ProseMirror li, .ProseMirror blockquote { orphans: 2; widows: 2; }
+  .ProseMirror .lw-dim, .ProseMirror .lw-hidden { opacity: 1 !important; }
+
+  /* "Plain" PDF: white paper + dark ink, but keep the current Style's fonts. */
+  :root[data-print="plain"] {
+    --bg: #ffffff; --surface: #ffffff; --text: #1a1a1a; --muted: #555555;
+    --accent: #333333; --rule: #cccccc; --selection: transparent; --caret: #1a1a1a;
+  }
+}

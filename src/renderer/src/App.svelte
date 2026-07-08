@@ -315,18 +315,17 @@
   // ── Export ────────────────────────────────────────────────────────────────
   async function exportAs(kind) {
     if (!editor) return
-    const payload = { doc: editor.getJSON(), html: editor.getHTML(), text: editor.getText(), meta: buildMeta() }
-    if (kind === 'pdf') {
-      const prevDraft = draft, prevStyle = style
-      draft = null; style = 'Paper'
-      applyCurrent()
-      await new Promise(r => setTimeout(r, 140))
+    if (kind === 'pdf' || kind === 'pdfPlain') {
+      // The document-only PDF comes from the print stylesheet; 'plain' swaps to
+      // white paper (fonts kept). No interface, no style-switching flash.
+      document.documentElement.setAttribute('data-print', kind === 'pdfPlain' ? 'plain' : 'styled')
+      await new Promise(r => setTimeout(r, 50))
       await window.api.exports.pdf({ title })
-      style = prevStyle; draft = prevDraft
-      applyCurrent()
-    } else {
-      await window.api.exports[kind](payload)
+      document.documentElement.removeAttribute('data-print')
+      return
     }
+    const payload = { doc: editor.getJSON(), html: editor.getHTML(), text: editor.getText(), meta: buildMeta() }
+    await window.api.exports[kind](payload)
   }
 
   // ── Presentation ────────────────────────────────────────────────────────────
