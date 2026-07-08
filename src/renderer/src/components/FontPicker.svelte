@@ -32,7 +32,6 @@
   }
   onDestroy(() => io.disconnect())
 
-  const style = (f) => loaded.has(f) ? `font-family:${fontStack(f)}` : ''
   const choose = (f) => { onPick(f); onClose() }
   const SAMPLE = 'The quick brown fox jumps over the lazy dog · 1234567890'
 </script>
@@ -58,15 +57,15 @@
 
     {#if q.trim() && !exact}
       <button class="fp-item" use:preview={q.trim()} on:click={() => choose(q.trim())}>
-        <span class="fp-name" style={style(q.trim())}>Use “{q.trim()}”</span>
-        <span class="fp-sample" style={style(q.trim())}>{SAMPLE}</span>
+        <span class="fp-name" style={loaded.has(q.trim()) ? 'font-family:' + fontStack(q.trim()) : ''}>Use “{q.trim()}”</span>
+        <span class="fp-sample" style={loaded.has(q.trim()) ? 'font-family:' + fontStack(q.trim()) : ''}>{SAMPLE}</span>
       </button>
     {/if}
 
     {#each list as f (f)}
       <button class="fp-item" class:sel={f === current} use:preview={f} on:click={() => choose(f)}>
-        <span class="fp-name" style={style(f)}>{f}</span>
-        <span class="fp-sample" style={style(f)}>{SAMPLE}</span>
+        <span class="fp-name" style={loaded.has(f) ? 'font-family:' + fontStack(f) : ''}>{f}</span>
+        <span class="fp-sample" style={loaded.has(f) ? 'font-family:' + fontStack(f) : ''}>{SAMPLE}</span>
       </button>
     {/each}
 
