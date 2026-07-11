@@ -1,5 +1,12 @@
 * { box-sizing: border-box; }
 
+/* Lightness for user-picked text/highlight colours — driven by the Style's
+   light/dark mode so a colour stays legible either way (coloured text is light
+   on dark and dark on light; highlights do the opposite). Only the lightness
+   flips; the picked hue/saturation are kept. */
+:root { --fg-l: 72%; --hl-l: 34%; --hl-ink: #f4efe8; }
+:root[data-dark="false"] { --fg-l: 42%; --hl-l: 79%; --hl-ink: #1a1a1a; }
+
 html, body, #app {
   height: 100%;
   margin: 0;
@@ -109,8 +116,8 @@ body {
 .ProseMirror a { color: var(--accent); }
 .ProseMirror s { text-decoration: line-through; }
 
-/* Highlighted text keeps dark ink so it's readable on any (usually light) highlight colour */
-.ProseMirror mark { color: #1a1a1a; border-radius: 3px; padding: 0 2px; box-decoration-break: clone; }
+/* Ink on highlights flips with the theme so it's readable on light or dark highlight colours */
+.ProseMirror mark { color: var(--hl-ink); border-radius: 3px; padding: 0 2px; box-decoration-break: clone; }
 
 /* Placeholder */
 .ProseMirror p.is-editor-empty:first-child::before {
@@ -168,5 +175,6 @@ body {
     --bg: #ffffff !important; --surface: #ffffff !important; --text: #1a1a1a !important;
     --muted: #555555 !important; --accent: #333333 !important; --rule: #cccccc !important;
     --selection: transparent !important; --caret: #1a1a1a !important;
+    --fg-l: 42% !important; --hl-l: 79% !important; --hl-ink: #1a1a1a !important;
   }
 }

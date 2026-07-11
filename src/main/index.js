@@ -32,6 +32,10 @@ function whisperBase() {
   return app.isPackaged ? join(process.resourcesPath, 'whisper') : join(__dirname, '../../resources/whisper')
 }
 
+// A .latte passed on the command line (file association / "open with"). Consumed
+// once by the renderer on startup.
+let initialFile = process.argv.slice(1).find(a => a.endsWith('.latte') && fs.existsSync(a)) || null
+
 let mainWindow = null
 let saveBoundsOnClose = true
 
@@ -171,6 +175,13 @@ ipcMain.handle('doc:saveAs', async (_e, { doc, meta }) => {
 
 ipcMain.handle('doc:recent', () => store.get('recentFiles').filter(f => fs.existsSync(f)))
 
+// A .latte the app was launched with (double-click / "open with"); one-shot.
+ipcMain.handle('doc:initialFile', () => {
+  const f = initialFile
+  initialFile = null
+  return f && fs.existsSync(f) ? f : null
+})
+
 // Search the latte folder by filename.
 ipcMain.handle('docs:search', (_e, query) => {
   const dir = docsDir()
@@ -291,6 +302,57 @@ ipcMain.handle('backup:restore', async () => {
   app.relaunch()
   app.exit(0)
   return true
+})
+
+// Install a desktop-menu shortcut + icon and register the .latte file type, so
+// the app shows up in the DE menu (KDE/GNOME/…) and .latte files open with it.
+// AppImages don't self-integrate, so this is opt-in from Settings.
+ipcMain.handle('desktop:install', () => {
+  const appimage = process.env.APPIMAGE
+  if (!appimage) return { error: 'Run the packaged .AppImage to install the menu shortcut.' }
+  const home = app.getPath('home')
+  const share = join(home, '.local', 'share')
+  const iconDest = join(share, 'icons', 'lattewrite.png')
+  const appsDir = join(share, 'applications')
+  const mimeRoot = join(share, 'mime')
+  const iconSrc = join(process.resourcesPath, 'icon.png')
+
+  fs.mkdirSync(join(share, 'icons'), { recursive: true })
+  fs.mkdirSync(appsDir, { recursive: true })
+  fs.mkdirSync(join(mimeRoot, 'packages'), { recursive: true })
+  if (fs.existsSync(iconSrc)) fs.copyFileSync(iconSrc, iconDest)
+
+  fs.writeFileSync(join(mimeRoot, 'packages', 'lattewrite.xml'),
+    `<?xml version="1.0" encoding="UTF-8"?>
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+  <mime-type type="application/x-latte">
+    <comment>LatteWrite document</comment>
+    <glob pattern="*.latte"/>
+    <icon name="lattewrite"/>
+  </mime-type>
+</mime-info>
+`, 'utf8')
+
+  fs.writeFileSync(join(appsDir, 'lattewrite.desktop'), [
+    '[Desktop Entry]',
+    'Type=Application',
+    'Name=LatteWrite',
+    'Comment=Presentation-first word processor',
+    `Exec="${appimage}" %f`,
+    `Icon=${iconDest}`,
+    'Terminal=false',
+    'Categories=Office;WordProcessor;',
+    'MimeType=application/x-latte;',
+    'StartupWMClass=LatteWrite',
+  ].join('\n') + '\n', 'utf8')
+
+  const run = (cmd, args) => { try { spawn(cmd, args, { stdio: 'ignore' }).unref() } catch {} }
+  run('update-desktop-database', [appsDir])
+  run('update-mime-database', [mimeRoot])
+  run('xdg-mime', ['default', 'lattewrite.desktop', 'application/x-latte'])
+  run('gtk-update-icon-cache', ['-f', '-t', join(share, 'icons')])
+  run('kbuildsycoca6', [])
+  return { ok: true }
 })
 
 // Launch a second, fully independent instance (its own editor/undo history) so a

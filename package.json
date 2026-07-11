@@ -64,7 +64,8 @@
       "out/**/*"
     ],
     "extraResources": [
-      { "from": "resources/whisper", "to": "whisper" }
+      { "from": "resources/whisper", "to": "whisper" },
+      { "from": "resources/icon.png", "to": "icon.png" }
     ]
   }
 }

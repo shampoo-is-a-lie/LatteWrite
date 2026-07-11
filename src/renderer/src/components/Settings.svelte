@@ -158,6 +158,14 @@
     await window.api.backup.restore()
   }
 
+  let desktopMsg = ''
+  async function installDesktop() {
+    const res = await window.api.desktop.install()
+    desktopMsg = res?.ok
+      ? 'Added. Look for LatteWrite in your application menu, and .latte files now open with it.'
+      : (res?.error || 'Could not add the shortcut.')
+  }
+
   let gpuMsg = ''
   async function testGpu() {
     gpuMsg = 'Checking…'
@@ -341,6 +349,13 @@
           <button class="solid" on:click={() => confirmRestore = true}>RESTORE…</button>
         </div>
         {#if backupMsg}<p class="note">{backupMsg}</p>{/if}
+
+        <div class="subhead">Desktop integration</div>
+        <p class="note">Add LatteWrite to your desktop's application menu (KDE, GNOME, …) with its icon, and set it as the handler for .latte files. AppImages don't do this on their own.</p>
+        <div class="row">
+          <button class="solid" on:click={installDesktop}>ADD TO APPLICATIONS MENU</button>
+        </div>
+        {#if desktopMsg}<p class="note">{desktopMsg}</p>{/if}
       </section>
     </div>
   </div>

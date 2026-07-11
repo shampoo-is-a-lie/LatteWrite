@@ -1,5 +1,7 @@
 <script>
   import DocSearch from './DocSearch.svelte'
+  import ColorMenu from './ColorMenu.svelte'
+  import { adaptiveColor } from '../colors.js'
   export let editor = null
   export let bump = 0
   export let title = 'Untitled'
@@ -26,22 +28,26 @@
   export let onVersions = () => {}
   export let drawing = false
   export let onDraw = () => {}
+  export let favText = []
+  export let favHl = []
+  export let onAddFavText = () => {}
+  export let onAddFavHl = () => {}
 
   let showFile = false
   let titleVal = title
   let editingTitle = false
   $: if (!editingTitle) titleVal = title
 
-  let textColor = '#e06c75'
-  let hlColor = '#ffe08a'
   let savedSel = null
 
   const cmd = (fn) => () => { if (editor) fn(editor.chain().focus()).run() }
   const grabSel = () => { if (editor) savedSel = { from: editor.state.selection.from, to: editor.state.selection.to } }
   const sel = () => savedSel || { from: editor.state.selection.from, to: editor.state.selection.to }
-  const setTextColor = (v) => { textColor = v; if (editor) editor.chain().focus().setTextSelection(sel()).setColor(v).run() }
+  // Colours are stored theme-adaptively (lightness comes from the Style), so they
+  // invert legibly when switching between light and dark Styles.
+  const applyTextColor = (hex) => { if (editor) editor.chain().focus().setTextSelection(sel()).setColor(adaptiveColor(hex, 'text')).run() }
   const clearTextColor = () => { if (editor) editor.chain().focus().setTextSelection(sel()).unsetColor().run() }
-  const setHighlight = (v) => { hlColor = v; if (editor) editor.chain().focus().setTextSelection(sel()).setHighlight({ color: v }).run() }
+  const applyHighlight = (hex) => { if (editor) editor.chain().focus().setTextSelection(sel()).setHighlight({ color: adaptiveColor(hex, 'highlight') }).run() }
   const clearHighlight = () => { if (editor) editor.chain().focus().setTextSelection(sel()).unsetHighlight().run() }
   const clearFormat = () => { if (editor) editor.chain().focus().unsetAllMarks().clearNodes().unsetTextAlign().run() }
   const fileDo = (fn) => { showFile = false; fn() }
@@ -75,7 +81,8 @@
     h1: editor?.isActive('heading', { level: 1 }), h2: editor?.isActive('heading', { level: 2 }),
     sub: editor?.isActive('heading', { level: 3 }),
     quote: editor?.isActive('blockquote'), bullet: editor?.isActive('bulletList'), ordered: editor?.isActive('orderedList'),
-    left: editor?.isActive({ textAlign: 'left' }), center: editor?.isActive({ textAlign: 'center' })
+    left: editor?.isActive({ textAlign: 'left' }), center: editor?.isActive({ textAlign: 'center' }),
+    right: editor?.isActive({ textAlign: 'right' })
   } : {}
 </script>
 
@@ -135,16 +142,10 @@
     <button class:on={s.underline} on:click={cmd(c => c.toggleUnderline())} title="Underline (Ctrl+U)"><u>U</u></button>
     <button class:on={s.strike} on:click={cmd(c => c.toggleStrike())} title="Strikethrough (Ctrl+Shift+X)"><s>S</s></button>
     <span class="sep"></span>
-    <label class="colorbtn" title="Text color" on:mousedown={grabSel}>
-      <span class="ci" style="border-bottom-color:{textColor}">A</span>
-      <input type="color" value={textColor} on:mousedown={grabSel} on:input={e => setTextColor(e.target.value)} />
-    </label>
-    <button class="clr" on:mousedown|preventDefault={grabSel} on:click={clearTextColor} title="Clear text color">A&times;</button>
-    <label class="colorbtn" class:on={s.highlight} title="Highlight" on:mousedown={grabSel}>
-      <span class="hi" style="background:{hlColor}">H</span>
-      <input type="color" value={hlColor} on:mousedown={grabSel} on:input={e => setHighlight(e.target.value)} />
-    </label>
-    <button class="clr" on:mousedown|preventDefault={grabSel} on:click={clearHighlight} title="Clear highlight">H&times;</button>
+    <ColorMenu label="A" kind="text" favorites={favText}
+               onApply={applyTextColor} onClear={clearTextColor} onAddFavorite={onAddFavText} onGrabSel={grabSel} />
+    <ColorMenu label="H" kind="highlight" active={s.highlight} favorites={favHl}
+               onApply={applyHighlight} onClear={clearHighlight} onAddFavorite={onAddFavHl} onGrabSel={grabSel} />
     <span class="sep"></span>
     <button class:on={s.h1} on:click={cmd(c => c.toggleHeading({ level: 1 }))} title="Heading 1">H1</button>
     <button class:on={s.h2} on:click={cmd(c => c.toggleHeading({ level: 2 }))} title="Heading 2">H2</button>
@@ -153,8 +154,9 @@
     <button class:on={s.bullet} on:click={cmd(c => c.toggleBulletList())} title="Bullet list">&bull;</button>
     <button class:on={s.ordered} on:click={cmd(c => c.toggleOrderedList())} title="Numbered list">1.</button>
     <span class="sep"></span>
-    <button class:on={s.left} on:click={cmd(c => c.setTextAlign('left'))} title="Align left">&#8676;</button>
-    <button class:on={s.center} on:click={cmd(c => c.setTextAlign('center'))} title="Align center">&#8677;</button>
+    <button class:on={s.left} on:click={cmd(c => c.setTextAlign('left'))} title="Align left"><span class="ali ali-left"></span></button>
+    <button class:on={s.center} on:click={cmd(c => c.setTextAlign('center'))} title="Align center"><span class="ali ali-center"></span></button>
+    <button class:on={s.right} on:click={cmd(c => c.setTextAlign('right'))} title="Align right"><span class="ali ali-right"></span></button>
     <span class="sep"></span>
     <div class="tablewrap">
       <button class:on={editor?.isActive('table')} on:click={() => showTable = !showTable} title="Table">TABLE</button>
@@ -233,12 +235,18 @@
   .title-input:focus { outline: none; border-color: var(--accent); color: var(--text); background: var(--bg); }
   .dirty { color: var(--accent); font-size: 0.9rem; margin-left: -0.15rem; }
 
-  .colorbtn { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 2rem; height: 1.85rem; border-radius: 7px; cursor: pointer; }
-  .colorbtn:hover { background: color-mix(in srgb, var(--accent) 16%, transparent); }
-  .colorbtn input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
-  .ci { font-weight: 700; border-bottom: 3px solid; line-height: 1; padding-bottom: 1px; }
-  .hi { font-weight: 700; color: #1a1a1a; border-radius: 3px; padding: 0 3px; }
-  .clr { min-width: auto; padding: 0.35rem 0.4rem; font-size: 0.68rem; color: var(--muted); }
+  /* Alignment icons: three ink lines anchored to the alignment side. */
+  .ali {
+    display: inline-block; width: 15px; height: 12px;
+    background:
+      linear-gradient(currentColor, currentColor) no-repeat,
+      linear-gradient(currentColor, currentColor) no-repeat,
+      linear-gradient(currentColor, currentColor) no-repeat;
+    background-size: 100% 2px, 65% 2px, 85% 2px;
+  }
+  .ali-left   { background-position: left 0, left 5px, left 10px; }
+  .ali-center { background-position: center 0, center 5px, center 10px; }
+  .ali-right  { background-position: right 0, right 5px, right 10px; }
 
   .zoom { display: flex; align-items: center; gap: 0.15rem; border: 1px solid var(--rule); border-radius: 8px; padding: 0.1rem; margin-left: auto; }
   .zoom button { min-width: 1.7rem; padding: 0.25rem 0.4rem; }

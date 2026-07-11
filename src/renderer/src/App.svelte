@@ -13,11 +13,23 @@
   import { applyStyle } from './theme.js'
   import { STYLES, isBuiltin, cloneStyle } from './styles.js'
   import { fontStack, ensureFontLoaded } from './fonts.js'
+  import { DEFAULT_TEXT_COLORS, DEFAULT_HL_COLORS } from './colors.js'
   import { createDictation } from './dictation.js'
 
   let settings = {}
   let editor = null
   let bump = 0
+
+  // Saved favourite colours for the text/highlight pickers (most-recent first).
+  let favText = DEFAULT_TEXT_COLORS
+  let favHl = DEFAULT_HL_COLORS
+  function addFav(list, hex, key) {
+    const next = [hex, ...list.filter(c => c.toLowerCase() !== hex.toLowerCase())].slice(0, 15)
+    window.api.settings.set({ [key]: next })
+    return next
+  }
+  const addFavText = (hex) => { favText = addFav(favText, hex, 'favTextColors') }
+  const addFavHl = (hex) => { favHl = addFav(favHl, hex, 'favHighlightColors') }
 
   let filePath = ''
   let title = 'Untitled'
@@ -541,12 +553,16 @@
     typewriter = !!settings.typewriter
     focusMode = !!settings.focusMode
     revealMode = !!settings.revealMode
+    if (settings.favTextColors?.length) favText = settings.favTextColors
+    if (settings.favHighlightColors?.length) favHl = settings.favHighlightColors
     applyCurrent()
     connected = await window.api.auth.status()
     maximized = await window.api.window.isMaximized()
     window.api.window.onFullscreen(v => { fullscreen = v; chromeHidden = v })
     window.api.window.onMaximized(v => { maximized = v })
     window.addEventListener('keydown', onKey)
+    const initial = await window.api.doc.initialFile()
+    if (initial) openByPath(initial)
   })
 </script>
 
@@ -560,6 +576,7 @@
       onZoomIn={() => zoomBy(0.1)} onZoomOut={() => zoomBy(-0.1)} onZoomReset={zoomReset}
       onMinimize={winMin} onMaximize={winMax} onClose={winClose} onRename={commitTitle}
       onOpenDoc={openByPath} drawing={drawMode} onDraw={() => drawMode = !drawMode}
+      favText={favText} favHl={favHl} onAddFavText={addFavText} onAddFavHl={addFavHl}
       onVersions={() => showVersions = true} />
   {/if}
 
