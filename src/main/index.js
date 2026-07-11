@@ -1,5 +1,6 @@
-import { app, shell, BrowserWindow, ipcMain, dialog, session } from 'electron'
+import { app, shell, BrowserWindow, ipcMain, dialog, session, protocol } from 'electron'
 import { join, dirname } from 'path'
+import { spawn } from 'child_process'
 import fs from 'fs'
 import AdmZip from 'adm-zip'
 import store, { dataPath } from './store.js'
@@ -19,6 +20,17 @@ const FILTERS = [{ name: 'LatteWrite', extensions: ['latte'] }]
 app.commandLine.appendSwitch('enable-unsafe-webgpu')
 app.commandLine.appendSwitch('enable-features', 'Vulkan')
 app.commandLine.appendSwitch('ignore-gpu-blocklist')
+
+// Serves the bundled Whisper model + ORT wasm to the renderer so dictation runs
+// offline. Must be registered as a privileged (standard, fetchable) scheme
+// before app-ready; the handler is installed in whenReady below.
+protocol.registerSchemesAsPrivileged([
+  { scheme: 'latte-asset', privileges: { standard: true, secure: true, supportFetchAPI: true, bypassCSP: true } }
+])
+const ASSET_MIME = { '.wasm': 'application/wasm', '.mjs': 'text/javascript', '.json': 'application/json', '.onnx': 'application/octet-stream', '.txt': 'text/plain' }
+function whisperBase() {
+  return app.isPackaged ? join(process.resourcesPath, 'whisper') : join(__dirname, '../../resources/whisper')
+}
 
 let mainWindow = null
 let saveBoundsOnClose = true
@@ -227,7 +239,7 @@ ipcMain.handle('export:pdf', async (e, { title }) => {
 
 ipcMain.handle('export:html', async (_e, payload) => {
   const out = await pickExportPath(payload.meta?.title || 'Untitled', 'html')
-  return out ? exportHTML(out, payload) : null
+  return out ? await exportHTML(out, payload) : null
 })
 ipcMain.handle('export:markdown', async (_e, payload) => {
   const out = await pickExportPath(payload.meta?.title || 'Untitled', 'md')
@@ -281,6 +293,15 @@ ipcMain.handle('backup:restore', async () => {
   return true
 })
 
+// Launch a second, fully independent instance (its own editor/undo history) so a
+// different file can be edited alongside this one.
+ipcMain.handle('window:new', () => {
+  const exe = process.env.APPIMAGE
+  if (exe) spawn(exe, [], { detached: true, stdio: 'ignore' }).unref()
+  else spawn(process.execPath, process.argv.slice(1), { detached: true, stdio: 'ignore' }).unref()
+  return true
+})
+
 // ── Window controls (frameless) ───────────────────────────────────────────────
 ipcMain.handle('window:minimize', () => mainWindow.minimize())
 ipcMain.handle('window:maximize', () => { mainWindow.isMaximized() ? mainWindow.unmaximize() : mainWindow.maximize() })
@@ -295,6 +316,20 @@ ipcMain.handle('window:presentation', () => {
 })
 
 app.whenReady().then(() => {
+  protocol.handle('latte-asset', async (request) => {
+    const u = new URL(request.url)
+    const base = whisperBase()
+    const filePath = join(base, decodeURIComponent(u.host + u.pathname))
+    if (!filePath.startsWith(base)) return new Response('forbidden', { status: 403 })
+    try {
+      const data = await fs.promises.readFile(filePath)
+      const ext = filePath.slice(filePath.lastIndexOf('.'))
+      return new Response(data, { headers: { 'Content-Type': ASSET_MIME[ext] || 'application/octet-stream', 'Access-Control-Allow-Origin': '*' } })
+    } catch {
+      return new Response('not found', { status: 404 })
+    }
+  })
+
   // Without this, Electron silently denies getUserMedia, so dictation never
   // gets microphone access.
   const MEDIA = ['media', 'audioCapture', 'microphone']

@@ -9,6 +9,7 @@
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
+    "predist": "bash scripts/fetch-whisper.sh",
     "dist": "electron-vite build && electron-builder --linux AppImage",
     "postdist": "mkdir -p ~/LatteWrite && cp dist/*.AppImage ~/LatteWrite/"
   },
@@ -61,6 +62,9 @@
     },
     "files": [
       "out/**/*"
+    ],
+    "extraResources": [
+      { "from": "resources/whisper", "to": "whisper" }
     ]
   }
 }

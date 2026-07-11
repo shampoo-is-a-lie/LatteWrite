@@ -56,6 +56,7 @@ contextBridge.exposeInMainWorld('api', {
   },
   window: {
     togglePresentation: () => ipcRenderer.invoke('window:presentation'),
+    newWindow: () => ipcRenderer.invoke('window:new'),
     minimize: () => ipcRenderer.invoke('window:minimize'),
     maximize: () => ipcRenderer.invoke('window:maximize'),
     close: () => ipcRenderer.invoke('window:close'),

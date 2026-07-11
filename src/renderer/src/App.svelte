@@ -1,5 +1,6 @@
 <script>
   import { onMount } from 'svelte'
+  import { EditorState } from '@tiptap/pm/state'
   import Editor from './components/Editor.svelte'
   import TopBar from './components/TopBar.svelte'
   import PresentationBar from './components/PresentationBar.svelte'
@@ -114,7 +115,7 @@
 
   function buildMeta() {
     const obj = resolveCurrent()
-    return { title, titleManual, style, fontScale, drawings, bodyFont: fontStack(obj.fonts.body), headingFont: fontStack(obj.fonts.heading), updatedAt: Date.now() }
+    return { title, titleManual, style, fontScale, drawings, bodyFont: fontStack(obj.fonts.body), headingFont: fontStack(obj.fonts.heading), bodyFamily: obj.fonts.body, headingFamily: obj.fonts.heading, updatedAt: Date.now() }
   }
 
   // Auto-derive the name from the first line — unless the user has set it explicitly.
@@ -242,9 +243,20 @@
     if (res) loadDoc(res)
   }
 
+  // Replace the document AND wipe undo/redo history. Without the wipe, Ctrl+Z
+  // can walk back past the load point into the previously-open file's content,
+  // which autosave would then persist over the current file — destroying it.
+  // Recreating the EditorState resets every plugin's state, including history.
+  function setDocument(content) {
+    editor.commands.setContent(content || '', false)
+    const view = editor.view
+    view.updateState(EditorState.create({ doc: view.state.doc, plugins: view.state.plugins }))
+    bump++; updatePresentation()
+  }
+
   function loadDoc(res) {
     filePath = res.filePath
-    editor.commands.setContent(res.doc || '')
+    setDocument(res.doc)
     const meta = res.meta || {}
     draft = null; draftBase = ''
     if (meta.style && (STYLES[meta.style] || customStyles[meta.style])) style = meta.style
@@ -260,9 +272,11 @@
     else computeTitle()
   }
 
+  function newWindow() { window.api.window.newWindow() }
+
   function newDoc() {
     if (!editor) return
-    editor.commands.clearContent()
+    setDocument('')
     editor.commands.focus()
     filePath = ''
     dirty = false
@@ -508,6 +522,7 @@
     else if (ctrl && e.shiftKey && k === 'x') { e.preventDefault(); editor?.chain().focus().toggleStrike().run() }
     else if (ctrl && k === 'd') { e.preventDefault(); toggleDictate() }
     else if (ctrl && k === 'o') { e.preventDefault(); openDoc() }
+    else if (ctrl && e.shiftKey && k === 'n') { e.preventDefault(); newWindow() }
     else if (ctrl && k === 'n') { e.preventDefault(); newDoc() }
     else if (ctrl && (k === '=' || k === '+')) { e.preventDefault(); zoomBy(0.1) }
     else if (ctrl && k === '-') { e.preventDefault(); zoomBy(-0.1) }
@@ -539,7 +554,7 @@
   {#if !chromeHidden}
     <TopBar
       {editor} {bump} {title} {saving} {dirty} {maximized} zoom={fontScale}
-      onNew={newDoc} onOpen={openDoc} onSave={() => saveNow(true)}
+      onNew={newDoc} onNewWindow={newWindow} onOpen={openDoc} onSave={() => saveNow(true)}
       onExport={exportAs} onStyles={() => showStyles = true}
       onSettings={openSettings} onPresent={toggleFullscreen}
       onZoomIn={() => zoomBy(0.1)} onZoomOut={() => zoomBy(-0.1)} onZoomReset={zoomReset}

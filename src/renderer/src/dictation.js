@@ -80,7 +80,12 @@ class WhisperDictation {
   async start(onInterim, onFinal, onStatus) {
     this.active = true
     const { pipeline, env } = await import('@huggingface/transformers')
-    env.allowLocalModels = false
+    // Load the bundled model + ORT wasm from disk (served by the latte-asset
+    // protocol) so the default model works with no download. Non-bundled models
+    // (tiny/small) 404 locally and fall back to a remote download.
+    env.allowLocalModels = true
+    env.localModelPath = 'latte-asset://models/'
+    env.backends.onnx.wasm.wasmPaths = 'latte-asset://ort/'
     this.transcriber = await this.load(pipeline, onStatus)
     if (!this.active) return
 

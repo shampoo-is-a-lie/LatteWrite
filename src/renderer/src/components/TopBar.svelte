@@ -8,6 +8,7 @@
   export let zoom = 1
   export let maximized = false
   export let onNew = () => {}
+  export let onNewWindow = () => {}
   export let onOpen = () => {}
   export let onSave = () => {}
   export let onExport = () => {}
@@ -85,6 +86,7 @@
       {#if showFile}
         <div class="menu">
           <button on:click={() => fileDo(onNew)}>New</button>
+          <button on:click={() => fileDo(onNewWindow)}>New Window</button>
           <button on:click={() => fileDo(onOpen)}>Open…</button>
           <button on:click={() => fileDo(onSave)}>{saving ? 'Saving…' : 'Save'}</button>
           <button on:click={() => fileDo(onVersions)}>Version history…</button>
