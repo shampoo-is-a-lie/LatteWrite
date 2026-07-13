@@ -15,6 +15,9 @@
   export let onOpen = () => {}
   export let onSave = () => {}
   export let onSaveAs = () => {}
+  export let onSaveCopy = () => {}
+  export let onOpenFolder = () => {}
+  export let onDeleteDoc = () => {}
   export let onExport = () => {}
   export let onStyles = () => {}
   export let onSettings = () => {}
@@ -99,9 +102,12 @@
           <button on:click={() => fileDo(onNew)}>New</button>
           <button on:click={() => fileDo(onNewWindow)}>New Window</button>
           <button on:click={() => fileDo(onOpen)}>Open…</button>
+          <button on:click={() => fileDo(onOpenFolder)}>Open files folder</button>
           <button on:click={() => fileDo(onSave)}>{saving ? 'Saving…' : 'Save'}</button>
-          <button on:click={() => fileDo(onSaveAs)}>Save as…</button>
+          <button on:click={() => fileDo(onSaveAs)}>Save as… (move)</button>
+          <button on:click={() => fileDo(onSaveCopy)}>Save a copy…</button>
           <button on:click={() => fileDo(onVersions)}>Version history…</button>
+          <button class="danger" on:click={() => fileDo(onDeleteDoc)}>Delete document…</button>
           <div class="menu-sep"></div>
           <button on:click={() => fileDo(() => onExport('pdf'))}>Export PDF — current style</button>
           <button on:click={() => fileDo(() => onExport('pdfPlain'))}>Export PDF — plain (white)</button>
@@ -266,6 +272,8 @@
     box-shadow: 0 16px 40px rgba(0,0,0,0.4);
   }
   .menu button { text-align: left; }
+  .menu button.danger { color: #e5484d; }
+  .menu button.danger:hover { background: #e5484d; color: #fff; }
   .menu-sep { height: 1px; background: var(--rule); margin: 0.3rem 0.2rem; }
   .tablemenu { min-width: auto; }
   .grid-label { font-size: 0.72rem; color: var(--muted); text-align: center; padding: 0.2rem 0 0.4rem; letter-spacing: 0.04em; }

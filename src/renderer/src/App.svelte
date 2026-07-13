@@ -50,6 +50,8 @@
   let dictating = false
   let dictLabel = ''
   let dictationCtl = null
+  let dictRestarting = false
+  let dictAutoRestarts = 0
   let audioInputs = []
   let dictAnchor = null
   let dictLen = 0
@@ -246,26 +248,44 @@
     saving = false
   }
 
-  // Save As… — write a copy to a directory/name of the user's choosing and
-  // continue editing there. The original file keeps its last-saved state.
-  async function saveAsDoc() {
-    if (!editor) return
-    saving = true
+  // Write the current document to a directory/name of the user's choosing.
+  // Returns the new path, or null if cancelled. Shared by Save As / Save a copy.
+  async function writeToNewLocation() {
     const curDoc = editor.getJSON()
     const today = ymd()
     const res = await window.api.doc.saveAs({ doc: curDoc, meta: { ...buildMeta(), savedDate: today }, versions })
+    return res ? { path: res.filePath, curDoc, today } : null
+  }
+
+  // Save As… — MOVE the document to the chosen location and edit it there. The
+  // original in /latte is removed (it stays findable in search if the new home is
+  // a /latte subfolder, since search now recurses).
+  async function saveAsDoc() {
+    if (!editor) return
+    saving = true
+    const prev = filePath
+    const res = await writeToNewLocation()
     if (res) {
-      filePath = res.filePath
+      filePath = res.path
       // Adopt the chosen filename as the title, treated as user-set so autosave
       // keeps the file where the user put it instead of renaming from line 1.
       title = filePath.split('/').pop().replace(/\.latte$/i, '')
       titleManual = true
-      lastSaveDate = today
-      lastSaveDoc = curDoc
+      lastSaveDate = res.today
+      lastSaveDoc = res.curDoc
       dirty = false
-      // Persist the adopted title/manual flag into the new file's meta.
-      await saveNow(false)
+      await saveNow(false)   // persist the adopted title/manual flag into the new file
+      if (prev && prev !== filePath) await window.api.doc.delete(prev)
     }
+    saving = false
+  }
+
+  // Save a copy… — write a copy to the chosen location but keep editing the
+  // ORIGINAL file; nothing is removed from /latte.
+  async function saveCopyDoc() {
+    if (!editor) return
+    saving = true
+    await writeToNewLocation()
     saving = false
   }
 
@@ -322,6 +342,28 @@
     lastSaveDate = null
     lastSaveDoc = null
     computeTitle()
+  }
+
+  function openDocsFolder() { window.api.doc.openFolder() }
+
+  // Delete the current .latte (with a themed confirm). Unsaved buffers just clear.
+  function requestDeleteDoc() {
+    if (!filePath) { newDoc(); return }
+    const name = filePath.split('/').pop().replace(/\.latte$/i, '')
+    showConfirm({
+      title: 'Delete document',
+      message: `Delete “${name}”? The file and its backups are moved to your system trash, and the editor resets to a new document.`,
+      confirmLabel: 'DELETE',
+      danger: true,
+      onConfirm: deleteCurrentDoc
+    })
+  }
+  async function deleteCurrentDoc() {
+    const target = filePath
+    clearTimeout(autosaveTimer)   // don't let a pending autosave re-create the file
+    filePath = ''                 // stop scheduleAutosave from touching it mid-delete
+    await window.api.doc.delete(target)
+    newDoc()
   }
 
   // ── Styles & fonts ────────────────────────────────────────────────────────
@@ -503,6 +545,7 @@
 
   function dictCommit(text) {
     if (!editor || !text) return
+    dictAutoRestarts = 0   // a successful commit means the engine is healthy again
     if (dictAnchor == null) dictAnchor = editor.state.selection.to
     const from = clampPos(dictAnchor)
     const to = clampPos(dictAnchor + dictLen)
@@ -513,21 +556,62 @@
     dictLen = 0
   }
 
+  // Turn whatever grey interim text is on screen into normal committed text.
+  function settleInterim() {
+    if (editor && dictLen > 0 && dictAnchor != null) {
+      const from = clampPos(dictAnchor), to = clampPos(dictAnchor + dictLen)
+      editor.chain().setTextSelection({ from, to }).unsetColor().setTextSelection(to).run()
+      dictAnchor = to
+    }
+    dictLen = 0
+  }
+
+  async function beginDictation() {
+    dictationCtl = createDictation(settings.dictationEngine || 'whisper', { deviceId: settings.audioDeviceId, model: settings.whisperModel })
+    await dictationCtl.start(dictInterim, dictCommit, (s) => { dictLabel = s }, onDictError)
+  }
+
+  // The engine reported it's wedged (WebGPU device loss / repetition loop).
+  // Restart it automatically — same effect as reopening the app.
+  function onDictError() {
+    if (!dictating || dictRestarting) return
+    if (++dictAutoRestarts > 3) {
+      dictationCtl?.stop()
+      dictating = false; dictLabel = ''; dictAnchor = null; dictLen = 0
+      showAlert('Dictation', 'The speech engine kept failing and was stopped. Try again, or pick a different mic/model in Settings.')
+      return
+    }
+    restartDictation()
+  }
+
+  // Tear the engine down and load a fresh one, keeping the cursor where it was.
+  // If the GPU session is dead, the reload falls back to CPU on its own.
+  async function restartDictation() {
+    if (dictRestarting || !dictating) return
+    dictRestarting = true
+    try { dictationCtl?.stop() } catch {}
+    settleInterim()
+    dictLabel = 'RESTARTING…'
+    await new Promise(r => setTimeout(r, 200))   // let the mic device release
+    try {
+      await beginDictation()
+    } catch (e) {
+      dictating = false; dictLabel = ''; showAlert('Dictation', e.message)
+    }
+    dictRestarting = false
+  }
+
   async function toggleDictate() {
     if (dictating) {
       dictationCtl?.stop()
-      if (editor && dictLen > 0 && dictAnchor != null) {
-        const from = clampPos(dictAnchor), to = clampPos(dictAnchor + dictLen)
-        editor.chain().setTextSelection({ from, to }).unsetColor().setTextSelection(to).run()
-      }
+      settleInterim()
       dictating = false; dictLabel = ''; dictAnchor = null; dictLen = 0
       return
     }
     if (!micAvailable) return
     try {
-      dictating = true; dictAnchor = null; dictLen = 0
-      dictationCtl = createDictation(settings.dictationEngine || 'whisper', { deviceId: settings.audioDeviceId, model: settings.whisperModel })
-      await dictationCtl.start(dictInterim, dictCommit, (s) => { dictLabel = s })
+      dictating = true; dictAnchor = null; dictLen = 0; dictAutoRestarts = 0
+      await beginDictation()
     } catch (e) { dictating = false; dictLabel = ''; showAlert('Dictation', e.message) }
   }
 
@@ -598,6 +682,7 @@
     <TopBar
       {editor} {bump} {title} {saving} {dirty} {maximized} zoom={fontScale}
       onNew={newDoc} onNewWindow={newWindow} onOpen={openDoc} onSave={() => saveNow(true)} onSaveAs={saveAsDoc}
+      onSaveCopy={saveCopyDoc} onOpenFolder={openDocsFolder} onDeleteDoc={requestDeleteDoc}
       onExport={exportAs} onStyles={() => showStyles = true}
       onSettings={openSettings} onPresent={toggleFullscreen}
       onZoomIn={() => zoomBy(0.1)} onZoomOut={() => zoomBy(-0.1)} onZoomReset={zoomReset}
@@ -617,7 +702,7 @@
   <PresentationBar
     {dictating} {dictLabel} {fullscreen} {chromeHidden} {saving} {micAvailable}
     {typewriter} {focusMode} {revealMode} {revealCount} {revealTotal}
-    onDictate={toggleDictate} onPresent={toggleFullscreen} onToggleChrome={toggleChrome}
+    onDictate={toggleDictate} onRestartDictate={restartDictation} onPresent={toggleFullscreen} onToggleChrome={toggleChrome}
     onToggleTypewriter={toggleTypewriter} onToggleFocus={toggleFocus} onToggleReveal={toggleReveal}
     onRevealNext={revealNext} onRevealPrev={revealPrev} />
 

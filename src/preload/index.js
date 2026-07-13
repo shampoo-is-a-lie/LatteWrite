@@ -18,6 +18,8 @@ contextBridge.exposeInMainWorld('api', {
     recent: () => ipcRenderer.invoke('doc:recent'),
     rename: (payload) => ipcRenderer.invoke('doc:rename', payload),
     autoNew: (payload) => ipcRenderer.invoke('doc:autoNew', payload),
+    delete: (filePath) => ipcRenderer.invoke('doc:delete', filePath),
+    openFolder: () => ipcRenderer.invoke('doc:openFolder'),
     search: (query) => ipcRenderer.invoke('docs:search', query),
     initialFile: () => ipcRenderer.invoke('doc:initialFile')
   },

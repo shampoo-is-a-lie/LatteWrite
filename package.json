@@ -11,7 +11,7 @@
     "preview": "electron-vite preview",
     "predist": "bash scripts/fetch-whisper.sh",
     "dist": "electron-vite build && electron-builder --linux AppImage",
-    "postdist": "mkdir -p ~/LatteWrite && cp dist/*.AppImage ~/LatteWrite/"
+    "postdist": "mkdir -p ~/LatteWrite && for f in dist/*.AppImage; do b=$(basename \"$f\"); [ -f ~/LatteWrite/\"$b\" ] && mv -f ~/LatteWrite/\"$b\" ~/LatteWrite/\"${b%.AppImage}_old.AppImage\"; cp \"$f\" ~/LatteWrite/\"$b\"; done && echo \"Deployed to ~/LatteWrite\""
   },
   "dependencies": {
     "@fontsource/inter": "^5.1.0",

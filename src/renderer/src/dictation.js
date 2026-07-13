@@ -13,10 +13,32 @@ const MIN_VOICED_S = 0.3   // need this much actual voice before transcribing
 const GROWTH_S = 0.25      // re-transcribe once this much new audio arrived
 const MAX_PHRASE_S = 18    // force a commit on very long unbroken speech
 const TICK_MS = 500
+const FAIL_LIMIT = 2       // consecutive bad passes (hang/throw/garbage) → ask to restart
 
 export function createDictation(engine = 'whisper', opts = {}) {
   if (engine === 'whisper') return new WhisperDictation(opts)
   return new WebSpeechDictation(opts)
+}
+
+// A WebGPU device loss can make the transcriber hang forever (never resolving),
+// which would wedge dictation until an app restart. Cap every inference call.
+function withTimeout(promise, ms) {
+  let t
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => { t = setTimeout(() => reject(new Error('dictation timeout')), ms) })
+  ]).finally(() => clearTimeout(t))
+}
+
+// Whisper sometimes wedges into a repetition loop ("word!!!!!!!!!!" / "the the the…").
+// Detect that so we drop the garbage instead of writing it, and treat it as a failure.
+function isDegenerate(raw) {
+  const s = (raw || '').trim()
+  if (!s) return false
+  if (/(\S)\1{7,}/.test(s.replace(/\s+/g, ''))) return true   // long run of one char, e.g. !!!!!!!!
+  const words = s.toLowerCase().split(/\s+/).filter(Boolean)
+  if (words.length >= 8 && new Set(words).size <= 2) return true
+  return false
 }
 
 // Whisper emits these markers for music/noise/silence — drop them.
@@ -75,10 +97,16 @@ class WhisperDictation {
     this.model = opts.model || WHISPER_MODEL
     this.active = false
     this.busy = false
+    this.fails = 0
+    this.wedged = false
+    // no_repeat_ngram_size blocks the runaway-token repetition that produces the
+    // "word!!!!!!" garbage; the isDegenerate() check is the backstop.
+    this.genOpts = { no_repeat_ngram_size: 3 }
   }
 
-  async start(onInterim, onFinal, onStatus) {
+  async start(onInterim, onFinal, onStatus, onError) {
     this.active = true
+    this.onError = onError
     const { pipeline, env } = await import('@huggingface/transformers')
     // Load the bundled model + ORT wasm from disk (served by the latte-asset
     // protocol) so the default model works with no download. Non-bundled models
@@ -163,7 +191,15 @@ class WhisperDictation {
     this.processed = this.samples
     try {
       const audio = downsample(mergeFloat32(this.phrase), this.rate, 16000)
-      const out = await this.transcriber(audio)
+      const timeout = this.device === 'GPU' ? 9000 : 30000
+      const out = await withTimeout(this.transcriber(audio, this.genOpts), timeout)
+      if (isDegenerate(out.text)) {
+        // Model looped into garbage — drop the whole phrase, don't write it.
+        this.reset()
+        this.noteFail()
+        return
+      }
+      this.fails = 0
       const text = cleanText(out.text)
       if (silent || tooLong) {
         if (text) onFinal(text)
@@ -171,8 +207,22 @@ class WhisperDictation {
       } else if (text) {
         onInterim(text)
       }
-    } catch { /* skip this pass */ }
-    this.busy = false
+    } catch {
+      this.noteFail()   // hang/timeout or a lost WebGPU session
+    } finally {
+      this.busy = false
+    }
+  }
+
+  // Too many consecutive bad passes → the engine is wedged (usually a WebGPU
+  // device loss). Stop ticking and ask the app to restart us from scratch.
+  noteFail() {
+    if (this.wedged) return
+    if (++this.fails >= FAIL_LIMIT) {
+      this.wedged = true
+      clearInterval(this.loop)
+      this.onError && this.onError()
+    }
   }
 
   stop() {
@@ -181,6 +231,9 @@ class WhisperDictation {
     try { if (this.proc) { this.proc.onaudioprocess = null; this.proc.disconnect() } } catch {}
     try { if (this.ctx) this.ctx.close() } catch {}
     try { if (this.stream) this.stream.getTracks().forEach(t => t.stop()) } catch {}
+    // Free the GPU/WASM session so a restart loads a clean one.
+    try { this.transcriber?.dispose?.() } catch {}
+    this.transcriber = null
   }
 }
 

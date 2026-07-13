@@ -1,5 +1,5 @@
 import { app, shell, BrowserWindow, ipcMain, dialog, session, protocol } from 'electron'
-import { join, dirname } from 'path'
+import { join, dirname, basename, extname } from 'path'
 import { spawn } from 'child_process'
 import fs from 'fs'
 import AdmZip from 'adm-zip'
@@ -182,13 +182,17 @@ ipcMain.handle('doc:initialFile', () => {
   return f && fs.existsSync(f) ? f : null
 })
 
-// Search the latte folder by filename.
+// Search the latte folder (and its subdirectories) by filename. Recursing lets
+// Save As targets that land in a latte subfolder stay findable; .backups and
+// other dot-folders are skipped.
 ipcMain.handle('docs:search', (_e, query) => {
   const dir = docsDir()
   const q = (query || '').toLowerCase()
   try {
-    return fs.readdirSync(dir)
+    return fs.readdirSync(dir, { recursive: true })
+      .map(f => String(f).split('\\').join('/'))
       .filter(f => f.toLowerCase().endsWith('.latte'))
+      .filter(f => !/(^|\/)\./.test(f))   // exclude hidden dirs like .backups
       .filter(f => !q || f.toLowerCase().includes(q))
       .sort((a, b) => a.localeCompare(b))
       .slice(0, 40)
@@ -209,6 +213,28 @@ ipcMain.handle('doc:rename', (_e, { filePath, name, soft }) => {
   store.set('currentFile', target)
   return { filePath: target }
 })
+
+// Send the current file (and its rolling backups) to the OS trash. Trash rather
+// than unlink so a mistaken delete is recoverable from the system trash.
+ipcMain.handle('doc:delete', async (_e, filePath) => {
+  if (!filePath || !fs.existsSync(filePath)) return { ok: true }
+  try { await shell.trashItem(filePath) } catch { try { fs.unlinkSync(filePath) } catch {} }
+  try {
+    const base = basename(filePath, extname(filePath))
+    const bdir = join(dirname(filePath), '.backups')
+    if (fs.existsSync(bdir)) {
+      for (const f of fs.readdirSync(bdir)) {
+        if (f.startsWith(base + '_') && f.endsWith('.latte')) { try { fs.unlinkSync(join(bdir, f)) } catch {} }
+      }
+    }
+  } catch {}
+  store.set('recentFiles', store.get('recentFiles').filter(f => f !== filePath))
+  if (store.get('currentFile') === filePath) store.set('currentFile', '')
+  return { ok: true }
+})
+
+// Reveal the default documents folder in the host file manager.
+ipcMain.handle('doc:openFolder', () => { shell.openPath(docsDir()); return true })
 
 // Create an autosaved draft in the latte folder immediately (unique name).
 ipcMain.handle('doc:autoNew', (_e, { doc, meta }) => {
