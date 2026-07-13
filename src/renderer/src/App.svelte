@@ -114,6 +114,7 @@
   $: revealTotal = (bump, editor) ? (editor?.view?.dom?.children?.length || 0) : 0
 
   $: curObj = draft || customStyles[style] || STYLES[style] || STYLES.Espresso
+  $: bgEffect = settings?.bgEffect || 'none'
   $: stylesMap = { ...STYLES, ...customStyles }
   $: styleOrder = [...Object.keys(STYLES), ...Object.keys(customStyles)]
   $: customSet = new Set(Object.keys(customStyles))
@@ -242,6 +243,29 @@
     if (res) { filePath = res.filePath; dirty = false; computeTitle() }
     lastSaveDate = today
     lastSaveDoc = curDoc
+    saving = false
+  }
+
+  // Save As… — write a copy to a directory/name of the user's choosing and
+  // continue editing there. The original file keeps its last-saved state.
+  async function saveAsDoc() {
+    if (!editor) return
+    saving = true
+    const curDoc = editor.getJSON()
+    const today = ymd()
+    const res = await window.api.doc.saveAs({ doc: curDoc, meta: { ...buildMeta(), savedDate: today }, versions })
+    if (res) {
+      filePath = res.filePath
+      // Adopt the chosen filename as the title, treated as user-set so autosave
+      // keeps the file where the user put it instead of renaming from line 1.
+      title = filePath.split('/').pop().replace(/\.latte$/i, '')
+      titleManual = true
+      lastSaveDate = today
+      lastSaveDoc = curDoc
+      dirty = false
+      // Persist the adopted title/manual flag into the new file's meta.
+      await saveNow(false)
+    }
     saving = false
   }
 
@@ -528,7 +552,8 @@
   function onKey(e) {
     const ctrl = e.ctrlKey || e.metaKey
     const k = e.key.toLowerCase()
-    if (ctrl && k === 's') { e.preventDefault(); saveNow(true) }
+    if (ctrl && e.shiftKey && k === 's') { e.preventDefault(); saveAsDoc() }
+    else if (ctrl && k === 's') { e.preventDefault(); saveNow(true) }
     else if (ctrl && e.shiftKey && k === 'p') { e.preventDefault(); toggleFullscreen() }
     else if (ctrl && e.shiftKey && k === 'h') { e.preventDefault(); toggleChrome() }
     else if (ctrl && e.shiftKey && k === 'x') { e.preventDefault(); editor?.chain().focus().toggleStrike().run() }
@@ -566,11 +591,13 @@
   })
 </script>
 
+<div class="bg-fx" data-bg={bgEffect}></div>
+
 <div class="app-shell">
   {#if !chromeHidden}
     <TopBar
       {editor} {bump} {title} {saving} {dirty} {maximized} zoom={fontScale}
-      onNew={newDoc} onNewWindow={newWindow} onOpen={openDoc} onSave={() => saveNow(true)}
+      onNew={newDoc} onNewWindow={newWindow} onOpen={openDoc} onSave={() => saveNow(true)} onSaveAs={saveAsDoc}
       onExport={exportAs} onStyles={() => showStyles = true}
       onSettings={openSettings} onPresent={toggleFullscreen}
       onZoomIn={() => zoomBy(0.1)} onZoomOut={() => zoomBy(-0.1)} onZoomReset={zoomReset}

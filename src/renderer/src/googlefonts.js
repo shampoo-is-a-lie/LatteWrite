@@ -24,7 +24,14 @@ export const GOOGLE_FONTS = [
   'Fraunces', 'Petrona', 'Piazzolla', 'Literata', 'Marcellus', 'Cinzel', 'Philosopher',
   'Baloo 2', 'Fredoka', 'Righteous', 'Alfa Slab One', 'Ultra', 'Special Elite', 'VT323',
   'Press Start 2P', 'Silkscreen', 'Orbitron', 'Audiowide', 'Michroma', 'Monoton',
-  'Bungee', 'Bungee Shade', 'Dancing Script', 'Pacifico', 'Lobster', 'Caveat',
+  'Bungee', 'Bungee Shade',
+  // Retro / computer / pixel / terminal
+  'Share Tech Mono', 'DotGothic16', 'Pixelify Sans', 'Handjet', 'Micro 5', 'Jersey 10',
+  'Jersey 25', 'Doto', 'Sixtyfour', 'Workbench', 'Nabla', 'Wallpoet', 'Iceland',
+  'Syncopate', 'Turret Road', 'Zen Dots', 'Kode Mono', 'Martian Mono', 'Major Mono Display',
+  'Nova Mono', 'Cutive Mono', 'Anonymous Pro', 'Chakra Petch', 'Tektur', 'Codystar',
+  'Faster One', 'Rationale', 'Gugi', 'Stalinist One',
+  'Dancing Script', 'Pacifico', 'Lobster', 'Caveat',
   'Shadows Into Light', 'Indie Flower', 'Permanent Marker', 'Satisfy', 'Great Vibes',
   'Kalam', 'Amatic SC', 'Courgette', 'Sacramento', 'Playpen Sans', 'Gloria Hallelujah'
 ]

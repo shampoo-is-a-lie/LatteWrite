@@ -32,6 +32,9 @@
   let whisperModel = settings.whisperModel || 'onnx-community/whisper-base.en'
   let audioDeviceId = settings.audioDeviceId || ''
   let backupsToKeep = settings.backupsToKeep ?? 10
+  let bg = settings.bgEffect || 'none'
+  const BACKGROUNDS = ['none', 'gradient', 'glow', 'aurora', 'grid', 'dots', 'vignette']
+  const setBg = (v) => { bg = v; onPatch({ bgEffect: v }) }
   let fh = headingFamily
   let fb = bodyFamily
   let newStyleName = ''
@@ -245,6 +248,14 @@
       </label>
     </div>
 
+    <div class="subhead">Background</div>
+    <p class="note">A subtle decorative backdrop behind your writing — nice for live/online presentation. Hidden in exports.</p>
+    <div class="bgrow">
+      {#each BACKGROUNDS as b}
+        <button class="bgopt" class:on={bg === b} on:click={() => setBg(b)}>{b}</button>
+      {/each}
+    </div>
+
     {#if isDraft}
       <div class="row">
         <input bind:value={newStyleName} placeholder="Name your style" on:keydown={(e) => e.key === 'Enter' && onSaveStyle(newStyleName)} />
@@ -417,6 +428,10 @@
   .editing { font-size: 0.8rem; color: var(--muted); margin: 0 0 0.7rem; }
   .editing b { color: var(--accent); }
   .subhead { font-size: 0.7rem; letter-spacing: 0.12em; color: var(--muted); margin: 0.9rem 0 0.5rem; text-transform: uppercase; }
+  .bgrow { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+  .bgopt { text-transform: capitalize; padding: 0.35rem 0.7rem; border-radius: 7px; border: 1px solid var(--rule); background: transparent; color: var(--text); cursor: pointer; font-size: 0.82rem; }
+  .bgopt:hover { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+  .bgopt.on { background: var(--accent); color: var(--bg); border-color: var(--accent); font-weight: 700; }
   .swatches { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.6rem; }
   .swatch { display: flex; flex-direction: column; align-items: center; gap: 0.3rem; cursor: pointer; }
   .swatch input[type=color] { width: 100%; height: 32px; border: 1px solid var(--rule); border-radius: 8px; background: none; cursor: pointer; padding: 2px; }

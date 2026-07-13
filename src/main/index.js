@@ -162,13 +162,13 @@ ipcMain.handle('doc:save', async (_e, { filePath, doc, meta, versions }) => {
   return { filePath: target }
 })
 
-ipcMain.handle('doc:saveAs', async (_e, { doc, meta }) => {
+ipcMain.handle('doc:saveAs', async (_e, { doc, meta, versions }) => {
   const res = await dialog.showSaveDialog(mainWindow, {
     defaultPath: join(docsDir(), `${meta?.title || 'Untitled'}.latte`),
     filters: FILTERS
   })
   if (res.canceled || !res.filePath) return null
-  saveDocument(res.filePath, { doc, meta }, store.get('backupsToKeep'))
+  saveDocument(res.filePath, { doc, meta, versions }, store.get('backupsToKeep'))
   addRecent(res.filePath)
   return { filePath: res.filePath }
 })

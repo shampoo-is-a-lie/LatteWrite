@@ -1,8 +1,32 @@
+import { Mark, mergeAttributes } from '@tiptap/core'
 import Table from '@tiptap/extension-table'
 import TableRow from '@tiptap/extension-table-row'
 import TableHeader from '@tiptap/extension-table-header'
 import TableCell from '@tiptap/extension-table-cell'
 import Image from '@tiptap/extension-image'
+
+// A text special-effect (glow/neon/…) applied as a class on a span. It's a mark
+// so it combines with colour/bold/etc.; the actual look lives in `.fx-*` CSS.
+export const TextFx = Mark.create({
+  name: 'textFx',
+  addAttributes() {
+    return {
+      fx: {
+        default: null,
+        parseHTML: (el) => el.getAttribute('data-fx'),
+        renderHTML: (attrs) => (attrs.fx ? { 'data-fx': attrs.fx, class: 'fx-' + attrs.fx } : {})
+      }
+    }
+  },
+  parseHTML() { return [{ tag: 'span[data-fx]' }] },
+  renderHTML({ HTMLAttributes }) { return ['span', mergeAttributes(HTMLAttributes), 0] },
+  addCommands() {
+    return {
+      setFx: (fx) => ({ commands }) => commands.setMark('textFx', { fx }),
+      unsetFx: () => ({ commands }) => commands.unsetMark('textFx')
+    }
+  }
+})
 
 // Table with a per-table borderless flag (data-borderless), toggled from the bar.
 export const CustomTable = Table.extend({

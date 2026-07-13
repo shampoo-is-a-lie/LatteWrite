@@ -10,7 +10,7 @@
   import Highlight from '@tiptap/extension-highlight'
   import FontFamily from '@tiptap/extension-font-family'
   import { Presentation } from '../presentation-extension.js'
-  import { CustomTable, ResizableImage, TableRow, TableHeader, TableCell, handleImagePaste } from '../editor-extensions.js'
+  import { CustomTable, ResizableImage, TableRow, TableHeader, TableCell, TextFx, handleImagePaste } from '../editor-extensions.js'
 
   export let content = null
   export let onReady = () => {}
@@ -38,7 +38,8 @@
         Presentation,
         CustomTable.configure({ resizable: false }),
         TableRow, TableHeader, TableCell,
-        ResizableImage
+        ResizableImage,
+        TextFx
       ],
       content: content || '',
       autofocus: 'end',

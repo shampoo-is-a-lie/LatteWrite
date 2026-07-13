@@ -1,6 +1,7 @@
 <script>
   import DocSearch from './DocSearch.svelte'
   import ColorMenu from './ColorMenu.svelte'
+  import FxMenu from './FxMenu.svelte'
   import { adaptiveColor } from '../colors.js'
   export let editor = null
   export let bump = 0
@@ -13,6 +14,7 @@
   export let onNewWindow = () => {}
   export let onOpen = () => {}
   export let onSave = () => {}
+  export let onSaveAs = () => {}
   export let onExport = () => {}
   export let onStyles = () => {}
   export let onSettings = () => {}
@@ -49,6 +51,8 @@
   const clearTextColor = () => { if (editor) editor.chain().focus().setTextSelection(sel()).unsetColor().run() }
   const applyHighlight = (hex) => { if (editor) editor.chain().focus().setTextSelection(sel()).setHighlight({ color: adaptiveColor(hex, 'highlight') }).run() }
   const clearHighlight = () => { if (editor) editor.chain().focus().setTextSelection(sel()).unsetHighlight().run() }
+  const applyFx = (id) => { if (editor) editor.chain().focus().setTextSelection(sel()).setFx(id).run() }
+  const clearFx = () => { if (editor) editor.chain().focus().setTextSelection(sel()).unsetFx().run() }
   const clearFormat = () => { if (editor) editor.chain().focus().unsetAllMarks().clearNodes().unsetTextAlign().run() }
   const fileDo = (fn) => { showFile = false; fn() }
 
@@ -82,7 +86,7 @@
     sub: editor?.isActive('heading', { level: 3 }),
     quote: editor?.isActive('blockquote'), bullet: editor?.isActive('bulletList'), ordered: editor?.isActive('orderedList'),
     left: editor?.isActive({ textAlign: 'left' }), center: editor?.isActive({ textAlign: 'center' }),
-    right: editor?.isActive({ textAlign: 'right' })
+    right: editor?.isActive({ textAlign: 'right' }), fx: editor?.isActive('textFx')
   } : {}
 </script>
 
@@ -96,6 +100,7 @@
           <button on:click={() => fileDo(onNewWindow)}>New Window</button>
           <button on:click={() => fileDo(onOpen)}>Open…</button>
           <button on:click={() => fileDo(onSave)}>{saving ? 'Saving…' : 'Save'}</button>
+          <button on:click={() => fileDo(onSaveAs)}>Save as…</button>
           <button on:click={() => fileDo(onVersions)}>Version history…</button>
           <div class="menu-sep"></div>
           <button on:click={() => fileDo(() => onExport('pdf'))}>Export PDF — current style</button>
@@ -146,6 +151,7 @@
                onApply={applyTextColor} onClear={clearTextColor} onAddFavorite={onAddFavText} onGrabSel={grabSel} />
     <ColorMenu label="H" kind="highlight" active={s.highlight} favorites={favHl}
                onApply={applyHighlight} onClear={clearHighlight} onAddFavorite={onAddFavHl} onGrabSel={grabSel} />
+    <FxMenu active={s.fx} onApply={applyFx} onClear={clearFx} onGrabSel={grabSel} />
     <span class="sep"></span>
     <button class:on={s.h1} on:click={cmd(c => c.toggleHeading({ level: 1 }))} title="Heading 1">H1</button>
     <button class:on={s.h2} on:click={cmd(c => c.toggleHeading({ level: 2 }))} title="Heading 2">H2</button>

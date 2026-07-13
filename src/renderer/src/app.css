@@ -36,7 +36,58 @@ body {
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: var(--bg);
+  background: transparent;   /* lets the .bg-fx decorative layer show through */
+  position: relative;
+  z-index: 1;
+}
+
+/* Optional decorative background (Settings > Style > Background). Fixed layer
+   behind the app-shell; effects are kept subtle so text stays readable. */
+.bg-fx { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+.bg-fx[data-bg="none"] { display: none; }
+.bg-fx[data-bg="gradient"] {
+  background:
+    radial-gradient(85% 70% at 10% 100%, color-mix(in srgb, var(--accent) 34%, transparent), transparent 60%),
+    radial-gradient(85% 70% at 95% 20%, color-mix(in srgb, var(--accent) 24%, transparent), transparent 60%);
+}
+.bg-fx[data-bg="glow"] {
+  background: radial-gradient(65% 58% at 50% 52%, color-mix(in srgb, var(--accent) 34%, transparent), transparent 72%);
+}
+.bg-fx[data-bg="vignette"] {
+  background: radial-gradient(115% 105% at 50% 46%, transparent 46%, rgba(0,0,0,0.62));
+}
+.bg-fx[data-bg="grid"] {
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--muted) 13%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--muted) 13%, transparent) 1px, transparent 1px);
+  background-size: 42px 42px;
+  -webkit-mask-image: radial-gradient(120% 100% at 50% 0%, #000 52%, transparent);
+          mask-image: radial-gradient(120% 100% at 50% 0%, #000 52%, transparent);
+}
+.bg-fx[data-bg="dots"] {
+  background-image: radial-gradient(color-mix(in srgb, var(--muted) 28%, transparent) 1.3px, transparent 1.5px);
+  background-size: 22px 22px;
+  -webkit-mask-image: radial-gradient(120% 110% at 50% 30%, #000 48%, transparent);
+          mask-image: radial-gradient(120% 110% at 50% 30%, #000 48%, transparent);
+}
+.bg-fx[data-bg="aurora"] { overflow: hidden; }
+.bg-fx[data-bg="aurora"]::before,
+.bg-fx[data-bg="aurora"]::after {
+  content: ''; position: absolute; width: 68vmax; height: 68vmax; border-radius: 50%;
+  filter: blur(60px); opacity: 0.75;
+}
+.bg-fx[data-bg="aurora"]::before {
+  background: radial-gradient(circle, color-mix(in srgb, var(--accent) 62%, transparent), transparent 62%);
+  top: -12vmax; left: -6vmax; animation: aurora-a 19s ease-in-out infinite alternate;
+}
+.bg-fx[data-bg="aurora"]::after {
+  background: radial-gradient(circle, color-mix(in srgb, var(--accent) 44%, transparent), transparent 62%);
+  bottom: -16vmax; right: -6vmax; animation: aurora-b 23s ease-in-out infinite alternate;
+}
+@keyframes aurora-a { from { transform: translate(0,0) scale(1); } to { transform: translate(20vmax,12vmax) scale(1.25); } }
+@keyframes aurora-b { from { transform: translate(0,0) scale(1.1); } to { transform: translate(-16vmax,-10vmax) scale(1); } }
+@media (prefers-reduced-motion: reduce) {
+  .bg-fx[data-bg="aurora"]::before, .bg-fx[data-bg="aurora"]::after { animation: none; }
 }
 
 /* ── Editor surface ─────────────────────────────────────────────────────────── */
@@ -119,6 +170,19 @@ body {
 /* Ink on highlights flips with the theme so it's readable on light or dark highlight colours */
 .ProseMirror mark { color: var(--hl-ink); border-radius: 3px; padding: 0 2px; box-decoration-break: clone; }
 
+/* Text special effects (FX button). Global so they also render in the picker preview.
+   Glow/neon follow the text's own colour (currentColor), combining with the colour mark. */
+.fx-glow { text-shadow: 0 0 0.4em currentColor; }
+.fx-neon { text-shadow: 0 0 1px rgba(255,255,255,0.9), 0 0 0.25em currentColor, 0 0 0.55em currentColor; }
+.fx-shadow { text-shadow: 0.05em 0.06em 0.02em rgba(0,0,0,0.45); }
+.fx-outline { -webkit-text-stroke: 0.5px var(--bg); paint-order: stroke fill; text-shadow: 0 0 1px var(--bg); }
+.fx-emboss { text-shadow: 0 1px 0 rgba(255,255,255,0.35), 0 -1px 0 rgba(0,0,0,0.42); }
+.fx-chrome {
+  background: linear-gradient(180deg, #ffffff 0%, #d3dae8 44%, #7f8da8 54%, #f0f3f9 100%);
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent; color: transparent;
+}
+
 /* Placeholder */
 .ProseMirror p.is-editor-empty:first-child::before {
   content: attr(data-placeholder);
@@ -151,7 +215,7 @@ body {
     height: auto !important; overflow: visible !important;
     background: var(--bg) !important; color: var(--text) !important;
   }
-  .topbar, .pbar { display: none !important; }
+  .topbar, .pbar, .bg-fx { display: none !important; }
   .app-shell, .editor-scroll {
     display: block !important; height: auto !important; overflow: visible !important;
     background: var(--bg) !important;
