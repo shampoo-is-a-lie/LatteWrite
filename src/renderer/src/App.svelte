@@ -123,6 +123,10 @@
   $: editingLabel = draft ? draftBase + ' (unsaved copy)' : style
 
   $: micAvailable = (settings.dictationEngine || 'whisper') === 'whisper'
+
+  // Window title (what KDE shows in the taskbar) reflects the current document.
+  // Electron mirrors the page title to the native window title automatically.
+  $: document.title = (title && title.trim()) ? `${title.trim()} — LatteWrite` : 'LatteWrite'
     ? true
     : !!(window.SpeechRecognition || window.webkitSpeechRecognition)
 
