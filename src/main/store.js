@@ -15,7 +15,7 @@ const store = new Store({
     oauthToken: null,
 
     // Appearance
-    style: 'Espresso',        // built-in name or a custom style name
+    style: 'Poppins',         // built-in name or a custom style name
     fontScale: 1,
     customStyles: {},          // user-saved styles: { name: styleObject }
 

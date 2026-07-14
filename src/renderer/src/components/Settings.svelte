@@ -1,6 +1,6 @@
 <script>
   import Select from './Select.svelte'
-  import FontPicker from './FontPicker.svelte'
+  import FontBrowser from './FontBrowser.svelte'
   import ConfirmDialog from './ConfirmDialog.svelte'
   import { fontStack } from '../fonts.js'
   export let settings = {}
@@ -381,7 +381,7 @@
 {/if}
 
 {#if fontModal}
-  <FontPicker
+  <FontBrowser
     title={fontModal === 'heading' ? 'Heading font' : 'Body font'}
     current={fontModal === 'heading' ? fh : fb}
     onPick={(f) => onSetFont(fontModal, f)}

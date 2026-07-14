@@ -2,10 +2,14 @@
 // other family is a Google font, fetched+cached by the main process and injected
 // as an @font-face <style> on demand.
 
-const BUNDLED = new Set(['Inter', 'Space Grotesk', 'Lora', 'Source Serif 4', 'Raleway', 'JetBrains Mono'])
+const BUNDLED = new Set([
+  'Inter', 'Space Grotesk', 'Lora', 'Source Serif 4', 'Raleway', 'JetBrains Mono',
+  // Bundled bitmap/system fonts for the "Systems" styles (see retro-fonts.css).
+  'ChicagoFLF', 'C64 Pro Mono', 'PxPlus IBM VGA8', 'BigBlue Terminal'
+])
 
 const SERIF = /serif|slab|lora|garamond|caslon|baskerville|playfair|spectral|newsreader|fraunces|cormorant|bitter|domine|vollkorn|arvo|cardo|neuton|gelasio|marcellus|cinzel|petrona|piazzolla|literata|merriweather|bodoni|alegreya|crimson|noto serif|pt serif|source serif|ibm plex serif|dm serif|libre|frank ruhl|philosopher/i
-const MONO = /mono|code|consol/i
+const MONO = /mono|code|consol|terminal|vga|bigblue|pxplus|c64/i
 
 export function fallback(family) {
   if (MONO.test(family)) return 'monospace'

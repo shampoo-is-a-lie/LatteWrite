@@ -10,7 +10,7 @@ import { syncBundle as onedriveSync } from './onedrive.js'
 import { readBundle } from './bundle.js'
 import { saveDocument } from './autosave.js'
 import { exportHTML, exportMarkdown, exportDocx } from './export.js'
-import { loadFontCss } from './fonts.js'
+import { loadFontCss, fontCatalog } from './fonts.js'
 
 const FILTERS = [{ name: 'LatteWrite', extensions: ['latte'] }]
 
@@ -289,6 +289,7 @@ ipcMain.handle('export:docx', async (_e, payload) => {
 
 // ── Fonts ─────────────────────────────────────────────────────────────────────
 ipcMain.handle('fonts:load', (_e, family) => loadFontCss(family))
+ipcMain.handle('fonts:catalog', () => fontCatalog())
 
 // ── Spellcheck / edit (for the themed context menu) ───────────────────────────
 ipcMain.handle('spell:set', (_e, enabled) => {

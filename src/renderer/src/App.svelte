@@ -4,14 +4,14 @@
   import Editor from './components/Editor.svelte'
   import TopBar from './components/TopBar.svelte'
   import PresentationBar from './components/PresentationBar.svelte'
-  import StylePicker from './components/StylePicker.svelte'
+  import ThemeChooser from './components/ThemeChooser.svelte'
   import Settings from './components/Settings.svelte'
   import ContextMenu from './components/ContextMenu.svelte'
   import ConfirmDialog from './components/ConfirmDialog.svelte'
   import Drawing from './components/Drawing.svelte'
   import VersionHistory from './components/VersionHistory.svelte'
   import { applyStyle } from './theme.js'
-  import { STYLES, isBuiltin, cloneStyle } from './styles.js'
+  import { STYLES, DEFAULT_STYLE, isBuiltin, cloneStyle } from './styles.js'
   import { fontStack, ensureFontLoaded } from './fonts.js'
   import { DEFAULT_TEXT_COLORS, DEFAULT_HL_COLORS } from './colors.js'
   import { createDictation } from './dictation.js'
@@ -39,7 +39,7 @@
   // Style state: `style` is the selected name (built-in or custom). `draft` is an
   // unsaved fork of a built-in being edited (built-ins are immutable).
   let customStyles = {}
-  let style = 'Espresso'
+  let style = DEFAULT_STYLE
   let draft = null
   let draftBase = ''
 
@@ -115,10 +115,9 @@
 
   $: revealTotal = (bump, editor) ? (editor?.view?.dom?.children?.length || 0) : 0
 
-  $: curObj = draft || customStyles[style] || STYLES[style] || STYLES.Espresso
+  $: curObj = draft || customStyles[style] || STYLES[style] || STYLES[DEFAULT_STYLE]
   $: bgEffect = settings?.bgEffect || 'none'
   $: stylesMap = { ...STYLES, ...customStyles }
-  $: styleOrder = [...Object.keys(STYLES), ...Object.keys(customStyles)]
   $: customSet = new Set(Object.keys(customStyles))
   $: editingLabel = draft ? draftBase + ' (unsaved copy)' : style
 
@@ -130,7 +129,7 @@
     ? true
     : !!(window.SpeechRecognition || window.webkitSpeechRecognition)
 
-  function resolveCurrent() { return draft || customStyles[style] || STYLES[style] || STYLES.Espresso }
+  function resolveCurrent() { return draft || customStyles[style] || STYLES[style] || STYLES[DEFAULT_STYLE] }
 
   function buildMeta() {
     const obj = resolveCurrent()
@@ -460,7 +459,7 @@
     delete next[name]
     customStyles = next
     window.api.settings.set({ customStyles })
-    if (style === name) pickStyle('Espresso')
+    if (style === name) pickStyle(DEFAULT_STYLE)
   }
 
   function uniqueStyleName(base) {
@@ -474,7 +473,7 @@
     const src = customStyles[name] || STYLES[name]
     if (!src) return
     const obj = cloneStyle(src)
-    obj.base = src.base || (isBuiltin(name) ? name : 'Espresso')
+    obj.base = src.base || (isBuiltin(name) ? name : DEFAULT_STYLE)
     const newName = uniqueStyleName(`${name} copy`)
     customStyles = { ...customStyles, [newName]: obj }
     style = newName
@@ -660,8 +659,16 @@
   onMount(async () => {
     settings = await window.api.settings.get()
     customStyles = settings.customStyles || {}
-    style = settings.style || 'Espresso'
-    if (!STYLES[style] && !customStyles[style]) style = 'Espresso'
+    // Styles promoted to built-ins shed their stale per-install custom copies.
+    const promoted = Object.keys(customStyles).filter((n) => STYLES[n])
+    if (promoted.length) {
+      const kept = { ...customStyles }
+      for (const n of promoted) delete kept[n]
+      customStyles = kept
+      window.api.settings.set({ customStyles })
+    }
+    style = settings.style || DEFAULT_STYLE
+    if (!STYLES[style] && !customStyles[style]) style = DEFAULT_STYLE
     fontScale = settings.fontScale || 1
     typewriter = !!settings.typewriter
     focusMode = !!settings.focusMode
@@ -711,7 +718,7 @@
     onRevealNext={revealNext} onRevealPrev={revealPrev} />
 
   {#if showStyles}
-    <StylePicker current={style} {stylesMap} order={styleOrder} {customSet}
+    <ThemeChooser current={style} {stylesMap} {customSet}
       onPick={pickStyle} onDelete={requestDeleteCustom} onDuplicate={duplicateStyle}
       onRename={renameStyle} onClose={() => showStyles = false} />
   {/if}

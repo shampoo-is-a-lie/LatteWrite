@@ -21,4 +21,8 @@ export function applyStyle(style, fontScale = 1) {
   root.style.setProperty('--font-scale', String(style.scale * fontScale))
 
   root.setAttribute('data-dark', style.dark ? 'true' : 'false')
+
+  // A "skin" repaints the whole shell (chrome + desktop) to portray a vintage OS.
+  if (style.skin) root.setAttribute('data-skin', style.skin)
+  else root.removeAttribute('data-skin')
 }

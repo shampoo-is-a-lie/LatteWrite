@@ -36,7 +36,8 @@ contextBridge.exposeInMainWorld('api', {
     docx: (payload) => ipcRenderer.invoke('export:docx', payload)
   },
   fonts: {
-    load: (family) => ipcRenderer.invoke('fonts:load', family)
+    load: (family) => ipcRenderer.invoke('fonts:load', family),
+    catalog: () => ipcRenderer.invoke('fonts:catalog')
   },
   backup: {
     create: () => ipcRenderer.invoke('backup:create'),

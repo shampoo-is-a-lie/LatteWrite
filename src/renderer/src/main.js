@@ -16,6 +16,7 @@ import '@fontsource/raleway/400.css'
 import '@fontsource/raleway/600.css'
 import '@fontsource/raleway/700.css'
 import '@fontsource/jetbrains-mono/400.css'
+import './retro-fonts.css'
 
 import './app.css'
 import App from './App.svelte'
