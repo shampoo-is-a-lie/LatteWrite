@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>LatteWrite — Web</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="row main">
+          <div class="group">
+            <button id="btn-open" class="solid">OPEN</button>
+            <button id="btn-new" class="solid">NEW</button>
+            <button id="btn-save" class="solid accent">SAVE</button>
+          </div>
+          <div class="filename" id="filename">No file open</div>
+          <div class="group right">
+            <button id="btn-zoom-out" title="Smaller">A-</button>
+            <button id="btn-zoom-in" title="Bigger">A+</button>
+            <button id="btn-theme" title="Toggle light/dark">LIGHT</button>
+          </div>
+        </div>
+
+        <div class="row tools" id="toolbar">
+          <div class="group">
+            <button data-cmd="undo" title="Undo">UNDO</button>
+            <button data-cmd="redo" title="Redo">REDO</button>
+          </div>
+          <div class="group">
+            <button data-cmd="p" title="Body text">¶</button>
+            <button data-cmd="h1">H1</button>
+            <button data-cmd="h2">H2</button>
+            <button data-cmd="h3">H3</button>
+          </div>
+          <div class="group">
+            <button data-cmd="bold" class="ff-b" title="Bold">B</button>
+            <button data-cmd="italic" class="ff-i" title="Italic">I</button>
+            <button data-cmd="underline" class="ff-u" title="Underline">U</button>
+            <button data-cmd="strike" class="ff-s" title="Strikethrough">S</button>
+          </div>
+          <div class="group">
+            <button data-cmd="bullet">UL</button>
+            <button data-cmd="ordered">OL</button>
+            <button data-cmd="quote">QUOTE</button>
+            <button data-cmd="code">CODE</button>
+            <button data-cmd="rule">RULE</button>
+          </div>
+          <div class="group">
+            <button data-cmd="left">LEFT</button>
+            <button data-cmd="center">CENTER</button>
+            <button data-cmd="right">RIGHT</button>
+          </div>
+          <div class="group">
+            <button id="btn-image">IMAGE</button>
+          </div>
+        </div>
+      </header>
+
+      <main class="editor-scroll">
+        <div class="editor-page" id="editor"></div>
+      </main>
+
+      <div class="hint" id="hint">
+        Open a <code>.latte</code> file to read or edit it. <strong>Save</strong> downloads an
+        updated copy (browsers can't overwrite the original in place).
+      </div>
+    </div>
+
+    <input id="file-input" type="file" accept=".latte,application/zip" hidden />
+    <input id="image-input" type="file" accept="image/*" hidden />
+
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>
