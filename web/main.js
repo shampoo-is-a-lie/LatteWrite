@@ -16,15 +16,29 @@ import {
   CustomTable, ResizableImage, TableRow, TableHeader, TableCell, TextFx, handleImagePaste
 } from '../src/renderer/src/editor-extensions.js'
 import { fontStack } from '../src/renderer/src/fonts.js'
+// Themes are pure data (colours + Google font names) + a CSS-var applier — both
+// import cleanly in the browser. The "Systems" skins are filtered out (they need
+// bundled bitmap fonts and shell chrome this build doesn't carry).
+import { STYLES, DEFAULT_STYLE, STYLE_CATEGORIES } from '../src/renderer/src/styles.js'
+import { applyStyle } from '../src/renderer/src/theme.js'
+
+const el = (id) => document.getElementById(id)
+const root = document.documentElement
 
 // ── App state ────────────────────────────────────────────────────────────────
 let editor = null
 let currentName = null
 let meta = {}
 let versions = []
+let currentStyle = resolveStartStyle()
+let themeTouched = false   // did the user pick a theme for the open doc this session?
+let zoomFactor = 1         // user zoom, multiplies the style's own scale
+let curScale = 1           // the current style's base scale
 
-const el = (id) => document.getElementById(id)
-const root = document.documentElement
+function resolveStartStyle() {
+  const saved = localStorage.getItem('lw-web-style')
+  return (saved && STYLES[saved] && !STYLES[saved].skin) ? saved : DEFAULT_STYLE
+}
 
 // The extension list mirrors src/renderer/src/components/Editor.svelte exactly.
 function extensions() {
@@ -76,21 +90,78 @@ function loadGoogleFont(family) {
   document.head.appendChild(link)
 }
 
-function applyMeta(m) {
-  // Poppins is the app's default Style, so new/font-less files match it here too.
-  const body = m.bodyFamily || 'Poppins'
-  const heading = m.headingFamily || 'Poppins'
-  const code = m.codeFamily || 'JetBrains Mono'
-  loadGoogleFont(body)
-  loadGoogleFont(heading)
-  loadGoogleFont(code)
-  root.style.setProperty('--font-body', fontStack(body))
-  root.style.setProperty('--font-heading', fontStack(heading))
-  root.style.setProperty('--font-code', fontStack(code))
-  root.style.setProperty('--font-scale', String(m.fontScale || 1))
-  const name = m.title || currentName || 'Untitled'
+// ── Themes ─────────────────────────────────────────────────────────────────────
+// Apply a built-in Style: colours + Google fonts + measure + light/dark, via the
+// shared applyStyle (identical CSS vars to the desktop app).
+function applyTheme(name) {
+  const obj = STYLES[name]
+  if (!obj) return
+  currentStyle = name
+  curScale = obj.scale || 1
+  applyStyle(obj, zoomFactor)
+  loadGoogleFont(obj.fonts.heading)
+  loadGoogleFont(obj.fonts.body)
+  loadGoogleFont(obj.fonts.code || 'JetBrains Mono')
+  localStorage.setItem('lw-web-style', name)
+  markActiveTheme()
+}
+
+// For a document whose Style we can't reproduce (custom or a Systems skin), keep the
+// current theme's colours but honour the fonts saved in the file's meta.
+function applyDocFonts(m) {
+  if (m.bodyFamily) { loadGoogleFont(m.bodyFamily); root.style.setProperty('--font-body', fontStack(m.bodyFamily)) }
+  if (m.headingFamily) { loadGoogleFont(m.headingFamily); root.style.setProperty('--font-heading', fontStack(m.headingFamily)) }
+  if (m.codeFamily) { loadGoogleFont(m.codeFamily); root.style.setProperty('--font-code', fontStack(m.codeFamily)) }
+}
+
+// Choose the theme for a freshly opened document.
+function themeForDoc(m) {
+  zoomFactor = m.fontScale || 1
+  if (m.style && STYLES[m.style] && !STYLES[m.style].skin) {
+    applyTheme(m.style)      // the file's own built-in Style
+  } else {
+    applyTheme(currentStyle) // unknown/custom/Systems → keep current colours…
+    applyDocFonts(m)         // …but match the document's saved fonts
+  }
+  themeTouched = false
+}
+
+function setDocMeta(m) {
+  const name = m.title || (currentName || 'Untitled').replace(/\.latte$/i, '')
   el('filename').textContent = name
   document.title = name + ' — LatteWrite Web'
+}
+
+// Build the chooser: every category except the bitmap-font "Systems" skins.
+function buildThemeMenu() {
+  const menu = el('theme-menu')
+  menu.innerHTML = ''
+  for (const [cat, names] of Object.entries(STYLE_CATEGORIES)) {
+    if (cat === 'Systems') continue
+    const usable = names.filter((n) => STYLES[n] && !STYLES[n].skin)
+    if (!usable.length) continue
+    const head = document.createElement('div')
+    head.className = 'theme-cat'
+    head.textContent = cat
+    menu.appendChild(head)
+    for (const n of usable) {
+      const t = STYLES[n].tokens
+      const b = document.createElement('button')
+      b.className = 'theme-item'
+      b.dataset.style = n
+      b.innerHTML =
+        `<span class="sw" style="background:${t.bg};color:${t.text};border-color:${t.rule}">Aa` +
+        `<span class="sw-dot" style="background:${t.accent}"></span></span>` +
+        `<span class="theme-name">${n}</span>`
+      menu.appendChild(b)
+    }
+  }
+}
+
+function markActiveTheme() {
+  for (const b of document.querySelectorAll('#theme-menu button[data-style]')) {
+    b.classList.toggle('on', b.dataset.style === currentStyle)
+  }
 }
 
 // ── Open / Save / New ─────────────────────────────────────────────────────────
@@ -106,7 +177,8 @@ async function openLatte(file) {
     versions = verEntry ? JSON.parse(await verEntry.async('string')) : []
     currentName = file.name
     buildEditor(doc)
-    applyMeta(meta)
+    themeForDoc(meta)
+    setDocMeta(meta)
     el('hint').classList.add('hidden')
   } catch (e) {
     alert('Could not open this file — it does not look like a valid .latte bundle.\n\n' + e.message)
@@ -118,6 +190,16 @@ async function openLatte(file) {
 async function saveLatte() {
   if (!editor) return
   meta = { ...meta, title: meta.title || (currentName || 'Untitled').replace(/\.latte$/i, ''), updatedAt: Date.now() }
+  // Only write the theme into the file if the user picked one here — otherwise the
+  // document's original Style (incl. custom/Systems ones) is preserved untouched.
+  if (themeTouched) {
+    const obj = STYLES[currentStyle]
+    meta.style = currentStyle
+    meta.bodyFamily = obj.fonts.body
+    meta.headingFamily = obj.fonts.heading
+    meta.codeFamily = obj.fonts.code
+    meta.fontScale = zoomFactor
+  }
   const zip = new JSZip()
   zip.file('doc.json', JSON.stringify(editor.getJSON()))
   zip.file('meta.json', JSON.stringify(meta, null, 2))
@@ -137,7 +219,9 @@ function newDoc() {
   meta = {}
   versions = []
   buildEditor('')
-  applyMeta(meta)
+  applyTheme(currentStyle)
+  themeTouched = false
+  setDocMeta({})
   el('hint').classList.remove('hidden')
 }
 
@@ -236,18 +320,27 @@ el('table-menu').addEventListener('click', (e) => {
   }
   el('table-menu').hidden = true
 })
-document.addEventListener('click', () => { el('table-menu').hidden = true })
-
-el('btn-theme').addEventListener('click', () => {
-  const light = root.getAttribute('data-theme') === 'light'
-  root.setAttribute('data-theme', light ? 'dark' : 'light')
-  el('btn-theme').textContent = light ? 'LIGHT' : 'DARK'
+// Theme chooser
+el('btn-theme').addEventListener('click', (e) => {
+  e.stopPropagation()
+  const m = el('theme-menu')
+  m.hidden = !m.hidden
+})
+el('theme-menu').addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-style]')
+  if (!b) return
+  themeTouched = true
+  applyTheme(b.dataset.style)
+  el('theme-menu').hidden = true
+})
+document.addEventListener('click', () => {
+  el('table-menu').hidden = true
+  el('theme-menu').hidden = true
 })
 
 function zoom(delta) {
-  const cur = parseFloat(getComputedStyle(root).getPropertyValue('--font-scale')) || 1
-  const next = Math.min(2.5, Math.max(0.6, Math.round((cur + delta) * 10) / 10))
-  root.style.setProperty('--font-scale', String(next))
+  zoomFactor = Math.min(2.5, Math.max(0.6, Math.round((zoomFactor + delta) * 10) / 10))
+  root.style.setProperty('--font-scale', String(curScale * zoomFactor))
 }
 el('btn-zoom-in').addEventListener('click', () => zoom(0.1))
 el('btn-zoom-out').addEventListener('click', () => zoom(-0.1))
@@ -267,6 +360,8 @@ window.addEventListener('drop', (e) => {
   if (f && /\.latte$/i.test(f.name)) openLatte(f)
 })
 
-// Start with an empty editor and the open hint.
+// Start with an empty editor, the chooser populated, and the default theme applied.
+buildThemeMenu()
 buildEditor('')
-applyMeta({})
+applyTheme(currentStyle)
+setDocMeta({})

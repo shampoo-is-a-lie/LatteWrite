@@ -1,32 +1,30 @@
 * { box-sizing: border-box; }
 
 /* ── Theme tokens ──────────────────────────────────────────────────────────────
-   A neutral dark ("Ink") and light ("Paper") pair. The document's own text and
-   highlight colours are stored as hsl(H S% var(--fg-l|--hl-l)) — theme-adaptive by
-   design — so they render correctly as long as these lightness vars are defined. */
+   These are just the pre-paint fallback; theme.js applyStyle() overrides the token
+   and font vars inline on <html> from the chosen built-in Style, and sets data-dark
+   which flips the adaptive lightness (--fg-l/--hl-l) below — matching the app. The
+   chrome uses its own --font-chrome so a Style's UI font never hijacks the toolbar. */
 :root {
-  --bg: #0b0b0d; --surface: #141417; --text: #f4f4f6; --muted: #9a9aa2;
-  --accent: #8ab4ff; --selection: rgba(138,180,255,0.24); --caret: #f4f4f6; --rule: #26262b;
+  --bg: #17100a; --surface: #21160d; --text: #efe3d2; --muted: #b89b7d;
+  --accent: #d4a373; --selection: rgba(212,163,115,0.28); --caret: #d4a373; --rule: #3a2a1b;
   --fg-l: 72%; --hl-l: 34%; --hl-ink: #f4efe8;
 
   --font-body: 'Poppins', sans-serif;
   --font-heading: 'Poppins', sans-serif;
   --font-ui: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-chrome: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --font-code: 'JetBrains Mono', monospace;
   --measure: 46rem;
   --font-scale: 1;
 }
-:root[data-theme="light"] {
-  --bg: #ffffff; --surface: #ffffff; --text: #1a1a1a; --muted: #6a6a6a;
-  --accent: #3454d1; --selection: rgba(0,0,0,0.12); --caret: #1a1a1a; --rule: #e2e2e2;
-  --fg-l: 42%; --hl-l: 79%; --hl-ink: #1a1a1a;
-}
+:root[data-dark="false"] { --fg-l: 42%; --hl-l: 79%; --hl-ink: #1a1a1a; }
 
 html, body { height: 100%; margin: 0; }
 body {
   background: var(--bg);
   color: var(--text);
-  font-family: var(--font-ui);
+  font-family: var(--font-chrome);
   -webkit-font-smoothing: antialiased;
   overflow: hidden;
 }
@@ -53,7 +51,7 @@ body {
 
 /* ALL-CAPS solid buttons */
 .topbar button {
-  font-family: var(--font-ui);
+  font-family: var(--font-chrome);
   font-size: 0.72rem; font-weight: 700; letter-spacing: 0.04em;
   text-transform: uppercase;
   min-height: 34px; padding: 0 0.6rem;
@@ -74,8 +72,37 @@ body {
 .topbar button.ff-u { text-decoration: underline; }
 .topbar button.ff-s { text-decoration: line-through; }
 
+/* Dropdowns */
+.tablewrap, .menuwrap { position: relative; }
+
+/* Theme chooser */
+.thememenu {
+  position: absolute; top: calc(100% + 4px); right: 0; z-index: 40;
+  width: 15rem; max-height: 62vh; overflow-y: auto;
+  background: var(--surface); border: 1px solid var(--rule); border-radius: 10px;
+  padding: 0.4rem; box-shadow: 0 12px 34px rgba(0,0,0,0.32);
+}
+.thememenu[hidden] { display: none; }
+.theme-cat {
+  font-size: 0.6rem; font-weight: 700; letter-spacing: 0.11em; text-transform: uppercase;
+  color: var(--muted); padding: 0.55rem 0.5rem 0.25rem;
+}
+.theme-item {
+  display: flex; align-items: center; gap: 0.6rem; width: 100%;
+  padding: 0.35rem 0.5rem; border: 1px solid transparent; border-radius: 7px;
+  background: transparent; color: var(--text); cursor: pointer;
+  font-family: var(--font-chrome); font-size: 0.85rem; font-weight: 600; text-align: left;
+}
+.theme-item:hover { background: color-mix(in srgb, var(--muted) 18%, transparent); }
+.theme-item.on { border-color: var(--accent); }
+.theme-item .sw {
+  flex: none; width: 2.1rem; height: 1.5rem; border-radius: 5px; border: 1px solid;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 0.72rem; font-weight: 700; position: relative;
+}
+.theme-item .sw-dot { position: absolute; right: 2px; bottom: 2px; width: 6px; height: 6px; border-radius: 50%; }
+
 /* Table dropdown */
-.tablewrap { position: relative; }
 .tablemenu {
   position: absolute; top: calc(100% + 4px); left: 0; z-index: 30;
   display: flex; flex-direction: column; min-width: 10rem;
