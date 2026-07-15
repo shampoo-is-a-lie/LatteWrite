@@ -159,7 +159,7 @@ body {
   border: 1px solid var(--rule);
   border-radius: 10px;
   padding: 1rem 1.25rem;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-code);
   font-size: 0.95rem;
   overflow-x: auto;
 }
@@ -167,7 +167,7 @@ body {
 .ProseMirror a { color: var(--accent); }
 /* Inline code (the `code` mark) — a subtle pill; reset for code inside a block. */
 .ProseMirror code {
-  font-family: 'JetBrains Mono', monospace; font-size: 0.88em;
+  font-family: var(--font-code); font-size: 0.88em;
   background: color-mix(in srgb, var(--muted) 18%, transparent);
   border: 1px solid var(--rule); border-radius: 4px; padding: 0.05em 0.35em;
 }

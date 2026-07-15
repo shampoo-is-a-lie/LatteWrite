@@ -80,10 +80,13 @@ function applyMeta(m) {
   // Poppins is the app's default Style, so new/font-less files match it here too.
   const body = m.bodyFamily || 'Poppins'
   const heading = m.headingFamily || 'Poppins'
+  const code = m.codeFamily || 'JetBrains Mono'
   loadGoogleFont(body)
   loadGoogleFont(heading)
+  loadGoogleFont(code)
   root.style.setProperty('--font-body', fontStack(body))
   root.style.setProperty('--font-heading', fontStack(heading))
+  root.style.setProperty('--font-code', fontStack(code))
   root.style.setProperty('--font-scale', String(m.fontScale || 1))
   const name = m.title || currentName || 'Untitled'
   el('filename').textContent = name

@@ -17,6 +17,8 @@ export function applyStyle(style, fontScale = 1) {
   root.style.setProperty('--font-heading', fontStack(style.fonts.heading))
   root.style.setProperty('--font-body', fontStack(style.fonts.body))
   root.style.setProperty('--font-ui', fontStack(style.fonts.ui))
+  // Code font is optional per-Style; falls back to the bundled mono.
+  root.style.setProperty('--font-code', fontStack(style.fonts.code || 'JetBrains Mono'))
   root.style.setProperty('--measure', style.measure)
   root.style.setProperty('--font-scale', String(style.scale * fontScale))
 

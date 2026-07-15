@@ -133,7 +133,7 @@
 
   function buildMeta() {
     const obj = resolveCurrent()
-    return { title, titleManual, style, fontScale, drawings, bodyFont: fontStack(obj.fonts.body), headingFont: fontStack(obj.fonts.heading), bodyFamily: obj.fonts.body, headingFamily: obj.fonts.heading, updatedAt: Date.now() }
+    return { title, titleManual, style, fontScale, drawings, bodyFont: fontStack(obj.fonts.body), headingFont: fontStack(obj.fonts.heading), bodyFamily: obj.fonts.body, headingFamily: obj.fonts.heading, codeFamily: obj.fonts.code, updatedAt: Date.now() }
   }
 
   // Auto-derive the name from the first line — unless the user has set it explicitly.
@@ -376,6 +376,7 @@
     ensureFontLoaded(obj.fonts.heading)
     ensureFontLoaded(obj.fonts.body)
     ensureFontLoaded(obj.fonts.ui)
+    ensureFontLoaded(obj.fonts.code)
   }
 
   function pickStyle(name) {
@@ -724,7 +725,7 @@
   {/if}
   {#if showSettings}
     <Settings {settings} {connected} inputs={audioInputs}
-      headingFamily={curObj.fonts.heading} bodyFamily={curObj.fonts.body}
+      headingFamily={curObj.fonts.heading} bodyFamily={curObj.fonts.body} codeFamily={curObj.fonts.code}
       tokens={curObj.tokens} measure={curObj.measure} dark={curObj.dark}
       isDraft={!!draft} {editingLabel}
       onPatch={patchSettings} onSetFont={setFont} onSaveStyle={saveStyle} onSpellcheck={setSpellcheck}

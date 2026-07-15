@@ -8,6 +8,7 @@
   export let inputs = []
   export let headingFamily = ''
   export let bodyFamily = ''
+  export let codeFamily = ''
   export let tokens = {}
   export let measure = '46rem'
   export let dark = true
@@ -37,11 +38,13 @@
   const setBg = (v) => { bg = v; onPatch({ bgEffect: v }) }
   let fh = headingFamily
   let fb = bodyFamily
+  let fc = codeFamily
   let newStyleName = ''
   let spellcheck = settings.spellcheck !== false
   // Reflect the live style/draft values (e.g. after a fork) back into the inputs.
   $: fh = headingFamily
   $: fb = bodyFamily
+  $: fc = codeFamily
   $: colors = { ...tokens }
   $: measureNum = parseFloat(measure) || 46
   $: darkV = !!dark
@@ -227,6 +230,10 @@
       <span>Body font</span>
       <button class="fontbtn" style={fb ? `font-family:${fontStack(fb)}` : ''} on:click={() => fontModal = 'body'}>{fb || 'Style default'}</button>
     </div>
+    <div class="field">
+      <span>Code font</span>
+      <button class="fontbtn" style={`font-family:${fontStack(fc || 'JetBrains Mono')}`} on:click={() => fontModal = 'code'}>{fc || 'JetBrains Mono'}</button>
+    </div>
 
     <div class="subhead">Colours</div>
     <div class="swatches">
@@ -382,8 +389,8 @@
 
 {#if fontModal}
   <FontBrowser
-    title={fontModal === 'heading' ? 'Heading font' : 'Body font'}
-    current={fontModal === 'heading' ? fh : fb}
+    title={fontModal === 'heading' ? 'Heading font' : fontModal === 'code' ? 'Code font' : 'Body font'}
+    current={fontModal === 'heading' ? fh : fontModal === 'code' ? fc : fb}
     onPick={(f) => onSetFont(fontModal, f)}
     onClose={() => fontModal = null} />
 {/if}

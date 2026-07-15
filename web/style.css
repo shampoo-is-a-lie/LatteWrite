@@ -12,6 +12,7 @@
   --font-body: 'Poppins', sans-serif;
   --font-heading: 'Poppins', sans-serif;
   --font-ui: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-code: 'JetBrains Mono', monospace;
   --measure: 46rem;
   --font-scale: 1;
 }
@@ -143,13 +144,13 @@ body {
 }
 .ProseMirror pre {
   background: var(--surface); border: 1px solid var(--rule); border-radius: 10px;
-  padding: 1rem 1.25rem; font-family: 'JetBrains Mono', monospace; font-size: 0.95rem; overflow-x: auto;
+  padding: 1rem 1.25rem; font-family: var(--font-code); font-size: 0.95rem; overflow-x: auto;
 }
 .ProseMirror hr { border: none; border-top: 1px solid var(--rule); margin: 2rem 0; }
 .ProseMirror a { color: var(--accent); }
 /* Inline code (the `code` mark) — a subtle pill; reset for code inside a block. */
 .ProseMirror code {
-  font-family: 'JetBrains Mono', monospace; font-size: 0.88em;
+  font-family: var(--font-code); font-size: 0.88em;
   background: color-mix(in srgb, var(--muted) 18%, transparent);
   border: 1px solid var(--rule); border-radius: 4px; padding: 0.05em 0.35em;
 }
