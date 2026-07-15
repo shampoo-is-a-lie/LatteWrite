@@ -93,6 +93,9 @@ body {
   background: transparent; color: var(--text); cursor: pointer;
   font-family: var(--font-chrome); font-size: 0.85rem; font-weight: 600; text-align: left;
 }
+/* Override the base .topbar button rule (higher specificity): left-align the
+   swatch + name and keep Style names in their natural case, not upper. */
+.thememenu .theme-item { justify-content: flex-start; text-transform: none; letter-spacing: normal; }
 .theme-item:hover { background: color-mix(in srgb, var(--muted) 18%, transparent); }
 .theme-item.on { border-color: var(--accent); }
 .theme-item .sw {
