@@ -165,6 +165,13 @@ body {
 }
 .ProseMirror hr { border: none; border-top: 1px solid var(--rule); margin: 2rem 0; }
 .ProseMirror a { color: var(--accent); }
+/* Inline code (the `code` mark) — a subtle pill; reset for code inside a block. */
+.ProseMirror code {
+  font-family: 'JetBrains Mono', monospace; font-size: 0.88em;
+  background: color-mix(in srgb, var(--muted) 18%, transparent);
+  border: 1px solid var(--rule); border-radius: 4px; padding: 0.05em 0.35em;
+}
+.ProseMirror pre code { background: none; border: none; padding: 0; font-size: inherit; }
 .ProseMirror s { text-decoration: line-through; }
 
 /* Ink on highlights flips with the theme so it's readable on light or dark highlight colours */

@@ -84,6 +84,7 @@
   $: s = (bump, editor) ? {
     bold: editor?.isActive('bold'), italic: editor?.isActive('italic'),
     underline: editor?.isActive('underline'), strike: editor?.isActive('strike'),
+    code: editor?.isActive('code'),
     highlight: editor?.isActive('highlight'),
     h1: editor?.isActive('heading', { level: 1 }), h2: editor?.isActive('heading', { level: 2 }),
     sub: editor?.isActive('heading', { level: 3 }),
@@ -152,6 +153,7 @@
     <button class:on={s.italic} on:click={cmd(c => c.toggleItalic())} title="Italic (Ctrl+I)"><i>I</i></button>
     <button class:on={s.underline} on:click={cmd(c => c.toggleUnderline())} title="Underline (Ctrl+U)"><u>U</u></button>
     <button class:on={s.strike} on:click={cmd(c => c.toggleStrike())} title="Strikethrough (Ctrl+Shift+X)"><s>S</s></button>
+    <button class:on={s.code} on:click={cmd(c => c.toggleCode())} title="Inline code (Ctrl+E)"><code>&lt;/&gt;</code></button>
     <span class="sep"></span>
     <ColorMenu label="A" kind="text" favorites={favText}
                onApply={applyTextColor} onClear={clearTextColor} onAddFavorite={onAddFavText} onGrabSel={grabSel} />
