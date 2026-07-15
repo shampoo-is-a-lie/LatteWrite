@@ -169,7 +169,7 @@ export const STYLES = {
   },
   'Terminal Orange': {
     dark: true,
-    fonts: { heading: 'Faster One', body: 'Sixtyfour', ui: 'Inter' },
+    fonts: { heading: 'Black Ops One', body: 'Sixtyfour', ui: 'Inter' },
     measure: '52rem', scale: 1.15,
     tokens: {
       bg: '#1e1810', surface: '#251d13', text: '#ffbb5c', muted: '#b8a993',
