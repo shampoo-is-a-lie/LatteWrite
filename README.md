@@ -51,3 +51,7 @@ CONNECT. The redirect URI is `http://localhost:42814/callback`.
 - Any-Google-Font loading at runtime + font embedding in exports
 - Custom Style editor
 - Per-paragraph reveal (teleprompter mode)
+
+## License
+
+GNU General Public License v3.0 or later — see [LICENSE](LICENSE).
