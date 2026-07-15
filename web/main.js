@@ -30,14 +30,22 @@ let editor = null
 let currentName = null
 let meta = {}
 let versions = []
-let currentStyle = resolveStartStyle()
-let themeTouched = false   // did the user pick a theme for the open doc this session?
-let zoomFactor = 1         // user zoom, multiplies the style's own scale
-let curScale = 1           // the current style's base scale
+// Preferred theme + zoom are cached per-browser. New/blank docs open in the
+// preferred theme (Poppins on a fresh browser); picking a theme updates the
+// preference; opening a .latte uses the file's own theme without changing it.
+let preferredStyle = cachedStyle()
+let currentStyle = preferredStyle   // the theme currently applied
+let themeTouched = false            // did the user pick a theme for the open doc this session?
+let zoomFactor = cachedZoom()       // user zoom, multiplies the style's own scale
+let curScale = 1                    // the current style's base scale
 
-function resolveStartStyle() {
+function cachedStyle() {
   const saved = localStorage.getItem('lw-web-style')
   return (saved && STYLES[saved] && !STYLES[saved].skin) ? saved : DEFAULT_STYLE
+}
+function cachedZoom() {
+  const z = parseFloat(localStorage.getItem('lw-web-zoom'))
+  return z >= 0.6 && z <= 2.5 ? z : 1
 }
 
 // The extension list mirrors src/renderer/src/components/Editor.svelte exactly.
@@ -102,7 +110,6 @@ function applyTheme(name) {
   loadGoogleFont(obj.fonts.heading)
   loadGoogleFont(obj.fonts.body)
   loadGoogleFont(obj.fonts.code || 'JetBrains Mono')
-  localStorage.setItem('lw-web-style', name)
   markActiveTheme()
 }
 
@@ -114,14 +121,14 @@ function applyDocFonts(m) {
   if (m.codeFamily) { loadGoogleFont(m.codeFamily); root.style.setProperty('--font-code', fontStack(m.codeFamily)) }
 }
 
-// Choose the theme for a freshly opened document.
+// Choose the theme for a freshly opened document. Zoom stays a browser preference,
+// so the file's saved fontScale doesn't override it.
 function themeForDoc(m) {
-  zoomFactor = m.fontScale || 1
   if (m.style && STYLES[m.style] && !STYLES[m.style].skin) {
-    applyTheme(m.style)      // the file's own built-in Style
+    applyTheme(m.style)        // the file's own built-in Style
   } else {
-    applyTheme(currentStyle) // unknown/custom/Systems → keep current colours…
-    applyDocFonts(m)         // …but match the document's saved fonts
+    applyTheme(preferredStyle) // unknown/custom/Systems → the user's preferred colours…
+    applyDocFonts(m)           // …but match the document's saved fonts
   }
   themeTouched = false
 }
@@ -219,7 +226,7 @@ function newDoc() {
   meta = {}
   versions = []
   buildEditor('')
-  applyTheme(currentStyle)
+  applyTheme(preferredStyle)
   themeTouched = false
   setDocMeta({})
   el('hint').classList.remove('hidden')
@@ -330,7 +337,9 @@ el('theme-menu').addEventListener('click', (e) => {
   const b = e.target.closest('button[data-style]')
   if (!b) return
   themeTouched = true
-  applyTheme(b.dataset.style)
+  preferredStyle = b.dataset.style
+  localStorage.setItem('lw-web-style', preferredStyle)
+  applyTheme(preferredStyle)
   el('theme-menu').hidden = true
 })
 document.addEventListener('click', () => {
@@ -341,6 +350,7 @@ document.addEventListener('click', () => {
 function zoom(delta) {
   zoomFactor = Math.min(2.5, Math.max(0.6, Math.round((zoomFactor + delta) * 10) / 10))
   root.style.setProperty('--font-scale', String(curScale * zoomFactor))
+  localStorage.setItem('lw-web-zoom', String(zoomFactor))
 }
 el('btn-zoom-in').addEventListener('click', () => zoom(0.1))
 el('btn-zoom-out').addEventListener('click', () => zoom(-0.1))
@@ -360,8 +370,8 @@ window.addEventListener('drop', (e) => {
   if (f && /\.latte$/i.test(f.name)) openLatte(f)
 })
 
-// Start with an empty editor, the chooser populated, and the default theme applied.
+// Start with an empty editor, the chooser populated, and the preferred theme applied.
 buildThemeMenu()
 buildEditor('')
-applyTheme(currentStyle)
+applyTheme(preferredStyle)
 setDocMeta({})
