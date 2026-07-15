@@ -50,7 +50,8 @@
     "electron-builder": "^25.1.8",
     "electron-vite": "^2.3.0",
     "svelte": "^4.2.18",
-    "vite": "^5.3.1"
+    "vite": "^5.3.1",
+    "vite-plugin-pwa": "^1.3.0"
   },
   "build": {
     "appId": "com.lattewrite.app",
@@ -67,8 +68,14 @@
       "out/**/*"
     ],
     "extraResources": [
-      { "from": "resources/whisper", "to": "whisper" },
-      { "from": "resources/icon.png", "to": "icon.png" }
+      {
+        "from": "resources/whisper",
+        "to": "whisper"
+      },
+      {
+        "from": "resources/icon.png",
+        "to": "icon.png"
+      }
     ]
   }
 }
