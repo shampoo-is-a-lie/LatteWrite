@@ -9,8 +9,8 @@
   --accent: #8ab4ff; --selection: rgba(138,180,255,0.24); --caret: #f4f4f6; --rule: #26262b;
   --fg-l: 72%; --hl-l: 34%; --hl-ink: #f4efe8;
 
-  --font-body: 'Source Serif 4', serif;
-  --font-heading: 'Space Grotesk', sans-serif;
+  --font-body: 'Poppins', sans-serif;
+  --font-heading: 'Poppins', sans-serif;
   --font-ui: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --measure: 46rem;
   --font-scale: 1;
@@ -72,6 +72,20 @@ body {
 .topbar button.ff-i { font-style: italic; }
 .topbar button.ff-u { text-decoration: underline; }
 .topbar button.ff-s { text-decoration: line-through; }
+
+/* Table dropdown */
+.tablewrap { position: relative; }
+.tablemenu {
+  position: absolute; top: calc(100% + 4px); left: 0; z-index: 30;
+  display: flex; flex-direction: column; min-width: 10rem;
+  background: var(--surface); border: 1px solid var(--rule); border-radius: 8px;
+  padding: 0.3rem; box-shadow: 0 10px 30px rgba(0,0,0,0.28);
+}
+.tablemenu[hidden] { display: none; }
+.tablemenu button {
+  justify-content: flex-start; text-transform: none; letter-spacing: 0;
+  font-weight: 600; width: 100%;
+}
 
 .hint {
   position: fixed; left: 50%; bottom: 1rem; transform: translateX(-50%);

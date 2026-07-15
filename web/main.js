@@ -77,8 +77,9 @@ function loadGoogleFont(family) {
 }
 
 function applyMeta(m) {
-  const body = m.bodyFamily || 'Source Serif 4'
-  const heading = m.headingFamily || 'Space Grotesk'
+  // Poppins is the app's default Style, so new/font-less files match it here too.
+  const body = m.bodyFamily || 'Poppins'
+  const heading = m.headingFamily || 'Poppins'
   loadGoogleFont(body)
   loadGoogleFont(heading)
   root.style.setProperty('--font-body', fontStack(body))
@@ -173,6 +174,7 @@ function refreshToolbar() {
     const q = ACTIVE[btn.dataset.cmd]
     btn.classList.toggle('on', !!q && editor.isActive(...q))
   }
+  el('btn-table').classList.toggle('on', editor.isActive('table'))
   el('btn-save').disabled = false
 }
 
@@ -204,6 +206,34 @@ el('image-input').addEventListener('change', (e) => {
   }
   e.target.value = ''
 })
+
+// Table controls. Insert drops a 3×3 with a header row; the rest act on the table
+// the caret is in (mirrors the desktop app's TABLE menu).
+const TABLE_CMDS = {
+  insert: (c) => c.insertTable({ rows: 3, cols: 3, withHeaderRow: true }),
+  addRow: (c) => c.addRowAfter(),
+  addCol: (c) => c.addColumnAfter(),
+  delRow: (c) => c.deleteRow(),
+  delCol: (c) => c.deleteColumn(),
+  delTable: (c) => c.deleteTable()
+}
+el('btn-table').addEventListener('click', (e) => {
+  e.stopPropagation()
+  const m = el('table-menu')
+  m.hidden = !m.hidden
+})
+el('table-menu').addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-tcmd]')
+  if (!btn || !editor) return
+  if (btn.dataset.tcmd === 'borders') {
+    const b = editor.getAttributes('table').borderless
+    editor.chain().focus().updateAttributes('table', { borderless: !b }).run()
+  } else {
+    TABLE_CMDS[btn.dataset.tcmd](editor.chain().focus()).run()
+  }
+  el('table-menu').hidden = true
+})
+document.addEventListener('click', () => { el('table-menu').hidden = true })
 
 el('btn-theme').addEventListener('click', () => {
   const light = root.getAttribute('data-theme') === 'light'
