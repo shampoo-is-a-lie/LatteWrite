@@ -19,6 +19,7 @@
   export let focus = false
   export let reveal = false
   export let revealCount = 1
+  export let editable = true
 
   let element
   let editor
@@ -42,13 +43,16 @@
         TextFx
       ],
       content: content || '',
-      autofocus: 'end',
+      editable,
+      autofocus: editable ? 'end' : false,
       editorProps: { handlePaste: (view, event) => handleImagePaste(view, event) },
       onUpdate: ({ transaction }) => { if (transaction.docChanged) onChange() },
       onSelectionUpdate: () => onSelect()
     })
     onReady(editor)
   })
+
+  $: if (editor) editor.setEditable(editable)
 
   // Push presentation flags into the extension and force a decoration refresh.
   $: if (editor) {

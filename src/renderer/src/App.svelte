@@ -10,6 +10,7 @@
   import ConfirmDialog from './components/ConfirmDialog.svelte'
   import Drawing from './components/Drawing.svelte'
   import VersionHistory from './components/VersionHistory.svelte'
+  import VersionViewer from './components/VersionViewer.svelte'
   import { applyStyle } from './theme.js'
   import { STYLES, DEFAULT_STYLE, isBuiltin, cloneStyle } from './styles.js'
   import { fontStack, ensureFontLoaded } from './fonts.js'
@@ -64,11 +65,12 @@
   let drawings = []
   let dialog = null  // themed alert/confirm
 
-  // Version history — one snapshot per day (the day's final content), newest 10.
+  // Version history — one snapshot per day (the day's final content), newest 20.
   let versions = []
   let lastSaveDate = null
   let lastSaveDoc = null
   let showVersions = false
+  let viewingVersion = null   // a snapshot opened in the read-only viewer window
 
   const ymd = (t = Date.now()) => {
     const d = new Date(t), p = (n) => String(n).padStart(2, '0')
@@ -77,17 +79,40 @@
   function upsertVersion(date, doc) {
     versions = [{ date, savedAt: Date.now(), doc }, ...versions.filter(v => v.date !== date)]
       .sort((a, b) => (a.date < b.date ? 1 : -1))
-      .slice(0, 10)
+      .slice(0, 20)
   }
 
   function onDrawChange() { dirty = true; scheduleAutosave() }
+
+  // Open a snapshot in the read-only viewer window (leaving the current document
+  // untouched). The small history list steps aside for the fullscreen viewer.
+  function viewVersion(v) { viewingVersion = v; showVersions = false }
+  function closeViewer() { viewingVersion = null; showVersions = true }
 
   function restoreVersion(v) {
     showConfirm({
       title: 'Restore version', danger: true, confirmLabel: 'RESTORE',
       message: `Replace the current document with the version from ${v.date}? The current content will be replaced.`,
-      onConfirm: () => { editor.commands.setContent(v.doc || ''); dirty = true; showVersions = false; saveNow(false) }
+      onConfirm: () => { editor.commands.setContent(v.doc || ''); dirty = true; showVersions = false; viewingVersion = null; saveNow(false) }
     })
+  }
+
+  // Save a snapshot as a brand-new .latte the user names and places — the current
+  // open document (its path, title and history) is left exactly as it is.
+  async function saveVersionAs(v) {
+    saving = true
+    // A snapshot stores only the text document, so the copy carries the current
+    // Style/fonts but not the live drawing overlay (which was never versioned).
+    const meta = { ...buildMeta(), title: `${(title || 'Untitled').trim()} (${v.date})`, titleManual: true, drawings: [], savedDate: ymd() }
+    await window.api.doc.saveAs({ doc: v.doc || '', meta, versions: [] })
+    saving = false
+  }
+
+  // Open a snapshot as its own editable document in a new window — a fresh copy
+  // is saved into the latte folder, then launched in a second window.
+  async function openVersionInNewWindow(v) {
+    const meta = { ...buildMeta(), title: `${(title || 'Untitled').trim()} (${v.date})`, titleManual: true, drawings: [], savedDate: ymd() }
+    await window.api.doc.openInNewWindow({ doc: v.doc || '', meta })
   }
   function deleteVersion(v) {
     showConfirm({
@@ -654,7 +679,12 @@
     else if (ctrl && k === '0') { e.preventDefault(); zoomReset() }
     else if (revealMode && e.key === 'PageDown') { e.preventDefault(); revealNext() }
     else if (revealMode && e.key === 'PageUp') { e.preventDefault(); revealPrev() }
-    else if (e.key === 'Escape') { showStyles = false; showSettings = false }
+    else if (e.key === 'Escape') {
+      if (dialog) return                       // a confirm is open — let it handle Esc
+      else if (viewingVersion) closeViewer()
+      else if (showVersions) showVersions = false
+      else { showStyles = false; showSettings = false }
+    }
   }
 
   onMount(async () => {
@@ -736,7 +766,13 @@
   <ContextMenu />
 
   {#if showVersions}
-    <VersionHistory {versions} onRestore={restoreVersion} onDelete={deleteVersion} onClose={() => showVersions = false} />
+    <VersionHistory {versions} onView={viewVersion} onDelete={deleteVersion} onClose={() => showVersions = false} />
+  {/if}
+
+  {#if viewingVersion}
+    <VersionViewer version={viewingVersion} {title}
+      onRestore={restoreVersion} onSaveAs={saveVersionAs}
+      onOpenNewWindow={openVersionInNewWindow} onClose={closeViewer} />
   {/if}
 
   {#if dialog}

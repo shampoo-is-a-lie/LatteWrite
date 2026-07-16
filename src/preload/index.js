@@ -15,6 +15,7 @@ contextBridge.exposeInMainWorld('api', {
     openPath: (p) => ipcRenderer.invoke('doc:openPath', p),
     save: (payload) => ipcRenderer.invoke('doc:save', payload),
     saveAs: (payload) => ipcRenderer.invoke('doc:saveAs', payload),
+    openInNewWindow: (payload) => ipcRenderer.invoke('doc:openInNewWindow', payload),
     recent: () => ipcRenderer.invoke('doc:recent'),
     rename: (payload) => ipcRenderer.invoke('doc:rename', payload),
     autoNew: (payload) => ipcRenderer.invoke('doc:autoNew', payload),

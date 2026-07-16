@@ -1,6 +1,6 @@
 <script>
   export let versions = []
-  export let onRestore = () => {}
+  export let onView = () => {}
   export let onDelete = () => {}
   export let onClose = () => {}
 
@@ -32,7 +32,7 @@
       <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
     </button>
   </div>
-  <p class="vh-note">One snapshot per day the document was edited, kept for the last 10 days. Today's live document is your current version.</p>
+  <p class="vh-note">One snapshot per day the document was edited, kept for the last 20 days. Today's live document is your current version.</p>
 
   <div class="vh-list">
     {#if versions.length}
@@ -43,7 +43,10 @@
             <div class="vh-preview">{docText(v.doc) || 'Empty'}</div>
           </div>
           <div class="vh-actions">
-            <button class="solid" on:click={() => onRestore(v)}>RESTORE</button>
+            <button class="solid" on:click={() => onView(v)}>
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              VIEW
+            </button>
             <button class="ghost" title="Delete version" on:click={() => onDelete(v)}>
               <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
             </button>
@@ -76,7 +79,7 @@
   .vh-time { color: var(--muted); font-size: 0.8rem; }
   .vh-preview { font-size: 0.8rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 0.15rem; }
   .vh-actions { display: flex; align-items: center; gap: 0.5rem; flex: none; }
-  .solid { background: var(--accent); color: var(--bg); border: none; cursor: pointer; font-family: var(--font-ui); font-weight: 700; letter-spacing: 0.05em; font-size: 0.72rem; padding: 0.5rem 0.9rem; border-radius: 8px; }
+  .solid { display: inline-flex; align-items: center; gap: 0.4rem; background: var(--accent); color: var(--bg); border: none; cursor: pointer; font-family: var(--font-ui); font-weight: 700; letter-spacing: 0.05em; font-size: 0.72rem; padding: 0.5rem 0.9rem; border-radius: 8px; }
   .ghost { width: 32px; height: 32px; display: grid; place-items: center; background: transparent; border: 1px solid var(--rule); color: var(--muted); border-radius: 8px; cursor: pointer; }
   .ghost:hover { color: #fff; background: #e5484d; border-color: #e5484d; }
   .vh-empty { padding: 1.4rem 0.8rem; color: var(--muted); font-size: 0.9rem; text-align: center; }

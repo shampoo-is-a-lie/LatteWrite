@@ -173,6 +173,21 @@ ipcMain.handle('doc:saveAs', async (_e, { doc, meta, versions }) => {
   return { filePath: res.filePath }
 })
 
+// Persist a document (e.g. a version snapshot) to a fresh, non-colliding file in
+// the latte folder, then open it in a brand-new window (a second instance) — so
+// an old version can be edited on its own without touching the current document.
+ipcMain.handle('doc:openInNewWindow', (_e, { doc, meta }) => {
+  const base = sanitizeName(meta?.title) || 'Untitled'
+  let target = join(docsDir(), `${base}.latte`)
+  for (let i = 2; fs.existsSync(target); i++) target = join(docsDir(), `${base} (${i}).latte`)
+  saveDocument(target, { doc, meta, versions: [] }, store.get('backupsToKeep'))
+  addRecent(target)
+  const exe = process.env.APPIMAGE
+  if (exe) spawn(exe, [target], { detached: true, stdio: 'ignore' }).unref()
+  else spawn(process.execPath, [...process.argv.slice(1), target], { detached: true, stdio: 'ignore' }).unref()
+  return { filePath: target }
+})
+
 ipcMain.handle('doc:recent', () => store.get('recentFiles').filter(f => fs.existsSync(f)))
 
 // A .latte the app was launched with (double-click / "open with"); one-shot.
