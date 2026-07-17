@@ -2,8 +2,21 @@
 // other family is a Google font, fetched+cached by the main process and injected
 // as an @font-face <style> on demand.
 
+// Families bundled at build time (see fonts-bundle.js) — every font any built-in
+// Style references. A family NOT in this set is a custom pick and is fetched +
+// cached on demand. Keep this in lock-step with fonts-bundle.js / styles.js.
 const BUNDLED = new Set([
+  // Core UI / reading
   'Inter', 'Space Grotesk', 'Lora', 'Source Serif 4', 'Raleway', 'JetBrains Mono',
+  // Style fonts (headings/body across the built-in Styles)
+  'Architects Daughter', 'Archivo', 'Audiowide', 'Black Ops One', 'Bungee', 'Caveat',
+  'Chakra Petch', 'Cinzel', 'Cormorant Garamond', 'Courier Prime', 'Cutive Mono',
+  'DM Serif Display', 'Dancing Script', 'DotGothic16', 'EB Garamond', 'Exo 2', 'Fraunces',
+  'Fredoka', 'Gochi Hand', 'Indie Flower', 'Josefin Sans', 'Kalam', 'Libre Caslon Text',
+  'Manrope', 'Monoton', 'Newsreader', 'Nunito', 'Orbitron', 'Outfit', 'PT Serif',
+  'Patrick Hand', 'Permanent Marker', 'Pixelify Sans', 'Playfair Display', 'Poiret One',
+  'Poppins', 'Press Start 2P', 'Quicksand', 'Rajdhani', 'Righteous', 'Shadows Into Light Two',
+  'Silkscreen', 'Sixtyfour', 'Sora', 'Special Elite', 'Unbounded', 'VT323', 'Work Sans',
   // Bundled bitmap/system fonts for the "Systems" styles (see retro-fonts.css).
   'ChicagoFLF', 'C64 Pro Mono', 'PxPlus IBM VGA8', 'BigBlue Terminal'
 ])
