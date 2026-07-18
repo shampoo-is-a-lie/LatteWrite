@@ -28,7 +28,13 @@ contextBridge.exposeInMainWorld('api', {
     install: () => ipcRenderer.invoke('desktop:install')
   },
   sync: {
-    now: (filePath) => ipcRenderer.invoke('sync:now', filePath)
+    now: (filePath) => ipcRenderer.invoke('sync:now', filePath),
+    all: () => ipcRenderer.invoke('sync:all'),
+    onUpdated: (cb) => {
+      const listener = () => cb()
+      ipcRenderer.on('sync:updated', listener)
+      return () => ipcRenderer.off('sync:updated', listener)
+    }
   },
   exports: {
     pdf: (payload) => ipcRenderer.invoke('export:pdf', payload),

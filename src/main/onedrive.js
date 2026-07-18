@@ -5,6 +5,7 @@
 // flow analogous to auth.js. Left as a clearly-marked stub so the wiring exists
 // and Google Drive (fully working) is the default provider today.
 
-export async function syncBundle() {
+// eslint-disable-next-line no-unused-vars
+export async function syncBundle(localPath, relPath) {
   throw new Error('OneDrive sync is not implemented yet (phase 2)')
 }

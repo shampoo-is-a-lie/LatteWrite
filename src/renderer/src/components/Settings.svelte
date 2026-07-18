@@ -164,6 +164,30 @@
     await window.api.backup.restore()
   }
 
+  let syncAllMsg = ''
+  let syncingAll = false
+  async function syncAll() {
+    syncingAll = true
+    syncAllMsg = 'Syncing…'
+    try {
+      const r = await window.api.sync.all()
+      if (r?.ok) {
+        const parts = []
+        if (r.pushed) parts.push(`${r.pushed} up`)
+        if (r.pulled) parts.push(`${r.pulled} down`)
+        if (r.deletedRemote) parts.push(`${r.deletedRemote} removed on Drive`)
+        if (r.deletedLocal) parts.push(`${r.deletedLocal} removed here`)
+        if (r.conflicts) parts.push(`${r.conflicts} conflict${r.conflicts === 1 ? '' : 's'} kept both`)
+        syncAllMsg = parts.length ? `Done — ${parts.join(', ')}.` : 'Already in sync.'
+      } else {
+        syncAllMsg = r?.error || 'Sync failed'
+      }
+    } catch (e) {
+      syncAllMsg = e?.message || 'Sync failed'
+    }
+    syncingAll = false
+  }
+
   let desktopMsg = ''
   async function installDesktop() {
     const res = await window.api.desktop.install()
@@ -335,8 +359,9 @@
       <Select value={syncProvider} options={PROVIDER_OPTS} onChange={(v) => { syncProvider = v; apply() }} />
     </div>
     <label class="check">
-      <input type="checkbox" bind:checked={syncOnSave} on:change={apply} /> Sync on every save
+      <input type="checkbox" bind:checked={syncOnSave} on:change={apply} /> Keep in sync with Drive
     </label>
+    <p class="note">Uploads each document as you save, and pulls down whatever your other devices changed when the app opens. Deletes and renames flow both ways.</p>
 
     <div class="creds">
       <label class="field"><span>Google Client ID</span><input bind:value={clientId} on:change={apply} placeholder="xxxx.apps.googleusercontent.com" /></label>
@@ -350,6 +375,14 @@
         <button class="solid" on:click={() => { apply(); onConnect() }}>CONNECT GOOGLE DRIVE</button>
       {/if}
     </div>
+    {#if connected}
+      <div class="subhead">Sync everything now</div>
+      <p class="note">Reconcile the whole folder with Drive in both directions: new and changed documents go up, your other devices' changes come down, deletes and renames propagate, and a document edited in two places is kept as both (the second saved as “… (conflict date)”). Runs automatically when the app opens; use this to force a full pass.</p>
+      <div class="row">
+        <button class="solid" on:click={syncAll} disabled={syncingAll}>{syncingAll ? 'SYNCING…' : 'SYNC ALL FILES'}</button>
+      </div>
+      {#if syncAllMsg}<p class="note">{syncAllMsg}</p>{/if}
+    {/if}
   </section>
 
       <section class="cp-pane" class:active={pane === 'backups'}>

@@ -711,6 +711,16 @@
     maximized = await window.api.window.isMaximized()
     window.api.window.onFullscreen(v => { fullscreen = v; chromeHidden = v })
     window.api.window.onMaximized(v => { maximized = v })
+    // A two-way sync just landed changes on disk. Reload the open document so it
+    // reflects what came down from Drive — but never over unsaved edits (those
+    // win and push on the next save), and reset to a blank doc if it was deleted
+    // remotely.
+    window.api.sync.onUpdated(async () => {
+      if (dirty || !filePath) return
+      const res = await window.api.doc.openPath(filePath)
+      if (res) loadDoc(res)
+      else newDoc()
+    })
     window.addEventListener('keydown', onKey)
     const initial = await window.api.doc.initialFile()
     if (initial) openByPath(initial)

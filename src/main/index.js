@@ -1,11 +1,11 @@
 import { app, shell, BrowserWindow, ipcMain, dialog, session, protocol } from 'electron'
-import { join, dirname, basename, extname } from 'path'
+import { join, dirname, basename, extname, relative, isAbsolute } from 'path'
 import { spawn } from 'child_process'
 import fs from 'fs'
 import AdmZip from 'adm-zip'
 import store, { dataPath } from './store.js'
 import { startAuthFlow, signOut, isAuthenticated } from './auth.js'
-import { syncBundle as gdriveSync } from './drive.js'
+import { syncBundle as gdriveSync, removeRemote as gdriveRemove, renameRemote as gdriveRename, twoWaySync as gdriveTwoWay } from './drive.js'
 import { syncBundle as onedriveSync } from './onedrive.js'
 import { readBundle } from './bundle.js'
 import { saveDocument } from './autosave.js'
@@ -215,7 +215,7 @@ ipcMain.handle('docs:search', (_e, query) => {
   } catch { return [] }
 })
 
-ipcMain.handle('doc:rename', (_e, { filePath, name, soft }) => {
+ipcMain.handle('doc:rename', async (_e, { filePath, name, soft }) => {
   const clean = sanitizeName(name) || 'Untitled'
   let target = join(dirname(filePath), clean + '.latte')
   if (target === filePath) return { filePath }
@@ -226,6 +226,9 @@ ipcMain.handle('doc:rename', (_e, { filePath, name, soft }) => {
   fs.renameSync(filePath, target)
   store.set('recentFiles', store.get('recentFiles').map(f => f === filePath ? target : f))
   store.set('currentFile', target)
+  // Rename the Drive copy in place so the cloud tracks the new name.
+  const oldRel = relInDocs(filePath)
+  if (liveSyncOn() && oldRel) { try { await gdriveRename(oldRel, basename(target)) } catch { /* next save reconciles */ } }
   return { filePath: target }
 })
 
@@ -245,6 +248,9 @@ ipcMain.handle('doc:delete', async (_e, filePath) => {
   } catch {}
   store.set('recentFiles', store.get('recentFiles').filter(f => f !== filePath))
   if (store.get('currentFile') === filePath) store.set('currentFile', '')
+  // Trash the Drive copy too so the cloud tracks the deletion.
+  const rel = relInDocs(filePath)
+  if (liveSyncOn() && rel) { try { await gdriveRemove(rel) } catch { /* next mirror reconciles */ } }
   return { ok: true }
 })
 
@@ -266,11 +272,76 @@ ipcMain.handle('doc:autoNew', (_e, { doc, meta }) => {
 // ── Sync ──────────────────────────────────────────────────────────────────────
 async function syncCurrent(filePath) {
   const provider = store.get('syncProvider')
-  if (provider === 'gdrive') return gdriveSync(filePath)
-  if (provider === 'onedrive') return onedriveSync(filePath)
+  // Path relative to the latte folder, so the provider mirrors any subfolders.
+  // A file saved outside the latte folder has no place in the tree, so it syncs
+  // flat by basename.
+  const rel = relInDocs(filePath) || basename(filePath)
+  if (provider === 'gdrive') return gdriveSync(filePath, rel)
+  if (provider === 'onedrive') return onedriveSync(filePath, rel)
   throw new Error('No sync provider selected')
 }
 ipcMain.handle('sync:now', async (_e, filePath) => syncCurrent(filePath))
+
+// Baseline manifest for two-way sync: each path's Drive id + checksum as of the
+// last successful reconcile. Kept in LW_DATA (not the latte folder, so it never
+// syncs itself). Lets us tell a new file from a remotely-deleted one.
+const SYNC_STATE = join(dataPath, 'drive-sync-state.json')
+function readSyncState() { try { return JSON.parse(fs.readFileSync(SYNC_STATE, 'utf8')) } catch { return {} } }
+function writeSyncState(obj) { try { fs.writeFileSync(SYNC_STATE, JSON.stringify(obj)) } catch { /* best effort */ } }
+
+// Send a document Drive just pulled/changed to the OS trash locally (recoverable),
+// falling back to a hard unlink if trashing isn't available.
+async function trashLocal(abs) {
+  try { await shell.trashItem(abs) } catch { try { fs.unlinkSync(abs) } catch { /* gone already */ } }
+}
+
+// Run the full two-way reconcile against Drive, persisting the new baseline.
+// Returns the stats summary.
+async function runTwoWaySync() {
+  const { stats, manifest } = await gdriveTwoWay(docsDir(), readSyncState(), { trashLocal })
+  writeSyncState(manifest)
+  return stats
+}
+
+function broadcast(channel, payload) {
+  for (const w of BrowserWindow.getAllWindows()) w.webContents.send(channel, payload)
+}
+
+// The SYNC ALL button: a manual full two-way reconcile (Google Drive only).
+ipcMain.handle('sync:all', async () => {
+  const provider = store.get('syncProvider')
+  if (provider === 'none') return { ok: false, error: 'No sync provider selected' }
+  if (provider !== 'gdrive') return { ok: false, error: 'Two-way sync is only available for Google Drive' }
+  try {
+    const stats = await runTwoWaySync()
+    broadcast('sync:updated')   // let open windows reload anything that changed on disk
+    return { ok: true, ...stats }
+  } catch (e) { return { ok: false, error: e.message } }
+})
+
+// Pull-on-open: reconcile once at launch so this device picks up whatever the
+// other device (e.g. the phone) changed. Only when Drive sync is active; runs
+// after the window has loaded so the renderer's listener is ready to refresh.
+let startupSynced = false
+function maybeStartupSync() {
+  if (startupSynced || !liveSyncOn() || !isAuthenticated()) return
+  startupSynced = true
+  const go = async () => { try { await runTwoWaySync(); broadcast('sync:updated') } catch { /* offline etc. */ } }
+  if (mainWindow && !mainWindow.webContents.isLoading()) go()
+  else mainWindow?.webContents.once('did-finish-load', go)
+}
+
+// Path of a file relative to the latte folder, or null if it lives outside the
+// tree (a custom Save As location) and so has no mirrored place on Drive.
+function relInDocs(filePath) {
+  const rel = relative(docsDir(), filePath)
+  return (!rel || rel.startsWith('..') || isAbsolute(rel)) ? null : rel
+}
+
+// True when changes should sync to/from Drive (Google Drive connected + enabled).
+function liveSyncOn() {
+  return store.get('syncOnSave') && store.get('syncProvider') === 'gdrive'
+}
 
 // ── Export ────────────────────────────────────────────────────────────────────
 async function pickExportPath(defaultName, ext) {
@@ -441,6 +512,7 @@ app.whenReady().then(() => {
   session.defaultSession.setPermissionCheckHandler((_wc, permission) => MEDIA.includes(permission))
 
   createWindow()
+  maybeStartupSync()   // pull anything the other device changed, once per launch
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow() })
 })
 
