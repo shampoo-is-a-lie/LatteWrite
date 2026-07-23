@@ -13,6 +13,10 @@
       list.push({ sep: true })
     }
     if (d.misspelledWord) list.push({ label: 'Add to dictionary', action: () => window.api.spell.add(d.misspelledWord) })
+    if (d.mediaType === 'image' && d.srcURL) {
+      list.push({ label: 'Copy image', action: () => window.api.edit.copyImage({ src: d.srcURL }) })
+      list.push({ sep: true })
+    }
     if (d.canCut) list.push({ label: 'Cut', action: () => window.api.edit.cut() })
     if (d.canCopy) list.push({ label: 'Copy', action: () => window.api.edit.copy() })
     if (d.canPaste) list.push({ label: 'Paste', action: () => window.api.edit.paste() })

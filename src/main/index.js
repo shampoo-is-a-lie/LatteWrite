@@ -1,4 +1,4 @@
-import { app, shell, BrowserWindow, ipcMain, dialog, session, protocol } from 'electron'
+import { app, shell, BrowserWindow, ipcMain, dialog, session, protocol, clipboard, nativeImage } from 'electron'
 import { join, dirname, basename, extname, relative, isAbsolute } from 'path'
 import { spawn } from 'child_process'
 import fs from 'fs'
@@ -75,6 +75,8 @@ function createWindow() {
       misspelledWord: params.misspelledWord,
       suggestions: params.dictionarySuggestions || [],
       isEditable: params.isEditable,
+      mediaType: params.mediaType,
+      srcURL: params.srcURL,
       canCut: params.editFlags.canCut,
       canCopy: params.editFlags.canCopy,
       canPaste: params.editFlags.canPaste,
@@ -389,6 +391,14 @@ ipcMain.handle('edit:cut', () => mainWindow.webContents.cut())
 ipcMain.handle('edit:copy', () => mainWindow.webContents.copy())
 ipcMain.handle('edit:paste', () => mainWindow.webContents.paste())
 ipcMain.handle('edit:selectAll', () => mainWindow.webContents.selectAll())
+// Images live in the document as data URLs; decode one onto the clipboard as a
+// real bitmap so it can be pasted into apps that don't understand HTML.
+ipcMain.handle('edit:copyImage', (_e, { src, html }) => {
+  const image = nativeImage.createFromDataURL(src)
+  const markup = html || `<img src="${src}">`
+  if (image.isEmpty()) clipboard.writeHTML(markup)
+  else clipboard.write({ image, html: markup })
+})
 
 // ── Full backup / restore (settings, custom styles, cached fonts) ─────────────
 ipcMain.handle('backup:create', async () => {

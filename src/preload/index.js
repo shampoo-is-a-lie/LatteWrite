@@ -59,7 +59,8 @@ contextBridge.exposeInMainWorld('api', {
     cut: () => ipcRenderer.invoke('edit:cut'),
     copy: () => ipcRenderer.invoke('edit:copy'),
     paste: () => ipcRenderer.invoke('edit:paste'),
-    selectAll: () => ipcRenderer.invoke('edit:selectAll')
+    selectAll: () => ipcRenderer.invoke('edit:selectAll'),
+    copyImage: (payload) => ipcRenderer.invoke('edit:copyImage', payload)
   },
   contextMenu: {
     onShow: (cb) => {
