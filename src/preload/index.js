@@ -24,6 +24,13 @@ contextBridge.exposeInMainWorld('api', {
     search: (query) => ipcRenderer.invoke('docs:search', query),
     initialFile: () => ipcRenderer.invoke('doc:initialFile')
   },
+  recover: {
+    list: () => ipcRenderer.invoke('recover:list'),
+    restore: (payload) => ipcRenderer.invoke('recover:restore', payload),
+    snapshots: (filePath) => ipcRenderer.invoke('recover:snapshots', filePath),
+    read: (file) => ipcRenderer.invoke('recover:read', file),
+    discard: (file) => ipcRenderer.invoke('recover:discard', file)
+  },
   desktop: {
     install: () => ipcRenderer.invoke('desktop:install')
   },

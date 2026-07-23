@@ -13,7 +13,8 @@ import FontFamily from '@tiptap/extension-font-family'
 // to the desktop app — a file edited here re-opens losslessly there and vice-versa.
 import { Presentation } from '../src/renderer/src/presentation-extension.js'
 import {
-  CustomTable, ResizableImage, TableRow, TableHeader, TableCell, TextFx, handleImagePaste
+  CustomTable, ResizableImage, TableRow, TableHeader, TableCell, TextFx, Find, handleImagePaste,
+  setFindQuery, stepFind, closeFind, scrollToFindMatch, findState
 } from '../src/renderer/src/editor-extensions.js'
 import { fontStack } from '../src/renderer/src/fonts.js'
 // Themes are pure data (colours + Google font names) + a CSS-var applier — both
@@ -63,7 +64,8 @@ function extensions() {
     CustomTable.configure({ resizable: false }),
     TableRow, TableHeader, TableCell,
     ResizableImage,
-    TextFx
+    TextFx,
+    Find
   ]
 }
 
@@ -71,6 +73,7 @@ function extensions() {
 // wipes undo history, so Ctrl+Z can never reach back into a previously open file.
 function buildEditor(content) {
   if (editor) editor.destroy()
+  el('findbar').hidden = true      // a fresh editor drops the find highlights
   editor = new Editor({
     element: el('editor'),
     extensions: extensions(),
@@ -270,6 +273,7 @@ function refreshToolbar() {
   }
   el('btn-table').classList.toggle('on', editor.isActive('table'))
   el('btn-save').disabled = false
+  findPaint()
 }
 
 // ── Wiring ─────────────────────────────────────────────────────────────────────
@@ -355,9 +359,70 @@ function zoom(delta) {
 el('btn-zoom-in').addEventListener('click', () => zoom(0.1))
 el('btn-zoom-out').addEventListener('click', () => zoom(-0.1))
 
-// Keyboard: Ctrl/Cmd+S saves (a download) instead of the browser's save-page.
+// ── Find in document ─────────────────────────────────────────────────────────
+let findCase = false
+
+// Also called on every transaction, so editing the document keeps the tally honest.
+function findPaint() {
+  if (!editor || el('findbar').hidden) return
+  const s = findState(editor)
+  const total = s.matches.length
+  const count = el('find-count')
+  count.textContent = !s.query ? ' ' : total ? `${s.index + 1} / ${total}` : 'none'
+  count.classList.toggle('none', !!s.query && !total)
+  el('find-prev').disabled = el('find-next').disabled = !total
+}
+
+function findRun() {
+  if (!editor) return
+  setFindQuery(editor, el('find-input').value, findCase)
+  findPaint()
+  scrollToFindMatch(editor)
+}
+
+function findStep(dir) {
+  if (!editor) return
+  stepFind(editor, dir)
+  findPaint()
+  scrollToFindMatch(editor)
+}
+
+function openFind() {
+  const sel = editor && editor.state.selection
+  const seed = sel && !sel.empty ? editor.state.doc.textBetween(sel.from, sel.to, ' ').trim() : ''
+  if (seed && !seed.includes('\n')) el('find-input').value = seed
+  el('findbar').hidden = false
+  el('find-input').select()
+  findRun()
+}
+
+function hideFind() {
+  el('findbar').hidden = true
+  if (editor) closeFind(editor)
+}
+
+el('find-input').addEventListener('input', findRun)
+el('find-input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); findStep(e.shiftKey ? -1 : 1) }
+  else if (e.key === 'Escape') { e.preventDefault(); hideFind() }
+})
+el('find-prev').addEventListener('click', () => findStep(-1))
+el('find-next').addEventListener('click', () => findStep(1))
+el('find-close').addEventListener('click', hideFind)
+el('find-case').addEventListener('click', () => {
+  findCase = !findCase
+  el('find-case').classList.toggle('on', findCase)
+  findRun()
+})
+
+// Keyboard: Ctrl/Cmd+S saves (a download) instead of the browser's save-page,
+// Ctrl/Cmd+F searches the document instead of the whole page.
 window.addEventListener('keydown', (e) => {
-  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); saveLatte() }
+  const ctrl = e.ctrlKey || e.metaKey
+  const k = e.key.toLowerCase()
+  if (ctrl && k === 's') { e.preventDefault(); saveLatte() }
+  else if (ctrl && k === 'f') { e.preventDefault(); openFind() }
+  else if (e.key === 'Escape' && !el('findbar').hidden) hideFind()
 })
 
 // Drag a .latte onto the window to open it.

@@ -1,5 +1,5 @@
 <script>
-  import { onMount } from 'svelte'
+  import { onMount, tick } from 'svelte'
   import { EditorState } from '@tiptap/pm/state'
   import Editor from './components/Editor.svelte'
   import TopBar from './components/TopBar.svelte'
@@ -11,6 +11,8 @@
   import Drawing from './components/Drawing.svelte'
   import VersionHistory from './components/VersionHistory.svelte'
   import VersionViewer from './components/VersionViewer.svelte'
+  import Recovery from './components/Recovery.svelte'
+  import FindBar from './components/FindBar.svelte'
   import { applyStyle } from './theme.js'
   import { STYLES, DEFAULT_STYLE, isBuiltin, cloneStyle } from './styles.js'
   import { fontStack, ensureFontLoaded } from './fonts.js'
@@ -70,7 +72,19 @@
   let lastSaveDate = null
   let lastSaveDoc = null
   let showVersions = false
+  let showRecovery = false
   let viewingVersion = null   // a snapshot opened in the read-only viewer window
+  let showFind = false
+  let findBar
+
+  async function openFind() {
+    // Seed from the selection, the way every other editor does.
+    const sel = editor?.state.selection
+    const seed = sel && !sel.empty ? editor.state.doc.textBetween(sel.from, sel.to, ' ').trim() : ''
+    showFind = true
+    await tick()
+    findBar && findBar.open(seed.includes('\n') ? '' : seed)
+  }
 
   const ymd = (t = Date.now()) => {
     const d = new Date(t), p = (n) => String(n).padStart(2, '0')
@@ -94,6 +108,25 @@
       title: 'Restore version', danger: true, confirmLabel: 'RESTORE',
       message: `Replace the current document with the version from ${v.date}? The current content will be replaced.`,
       onConfirm: () => { editor.commands.setContent(v.doc || ''); dirty = true; showVersions = false; viewingVersion = null; saveNow(false) }
+    })
+  }
+
+  // An earlier save of the open document, loaded from .backups/.mirror. Saving it
+  // rotates the current state into .backups first, so nothing is lost either way.
+  function rollbackTo(res, snap) {
+    showConfirm({
+      title: 'Restore earlier save', danger: true, confirmLabel: 'RESTORE',
+      message: `Replace the current document with the save from ${new Date(snap.at).toLocaleString()}? The state you have now is kept as a snapshot.`,
+      onConfirm: () => {
+        setDocument(res.doc)
+        const m = res.meta || {}
+        if (m.style && (STYLES[m.style] || customStyles[m.style])) style = m.style
+        if (m.titleManual && m.title) { title = m.title; titleManual = true }
+        applyCurrent()
+        dirty = true
+        showRecovery = false
+        saveNow(false)
+      }
     })
   }
 
@@ -340,6 +373,7 @@
 
   function loadDoc(res) {
     filePath = res.filePath
+    showFind = false          // a fresh EditorState drops the find highlights
     setDocument(res.doc)
     const meta = res.meta || {}
     draft = null; draftBase = ''
@@ -672,6 +706,7 @@
     else if (ctrl && e.shiftKey && k === 'x') { e.preventDefault(); editor?.chain().focus().toggleStrike().run() }
     else if (ctrl && k === 'd') { e.preventDefault(); toggleDictate() }
     else if (ctrl && k === 'o') { e.preventDefault(); openDoc() }
+    else if (ctrl && k === 'f') { e.preventDefault(); openFind() }
     else if (ctrl && e.shiftKey && k === 'n') { e.preventDefault(); newWindow() }
     else if (ctrl && k === 'n') { e.preventDefault(); newDoc() }
     else if (ctrl && (k === '=' || k === '+')) { e.preventDefault(); zoomBy(0.1) }
@@ -681,6 +716,8 @@
     else if (revealMode && e.key === 'PageUp') { e.preventDefault(); revealPrev() }
     else if (e.key === 'Escape') {
       if (dialog) return                       // a confirm is open — let it handle Esc
+      else if (showFind) showFind = false
+      else if (showRecovery) showRecovery = false
       else if (viewingVersion) closeViewer()
       else if (showVersions) showVersions = false
       else { showStyles = false; showSettings = false }
@@ -741,13 +778,19 @@
       onMinimize={winMin} onMaximize={winMax} onClose={winClose} onRename={commitTitle}
       onOpenDoc={openByPath} drawing={drawMode} onDraw={() => drawMode = !drawMode}
       favText={favText} favHl={favHl} onAddFavText={addFavText} onAddFavHl={addFavHl}
-      onVersions={() => showVersions = true} />
+      onVersions={() => showVersions = true} onRecover={() => showRecovery = true} />
   {/if}
 
-  <div class="editor-scroll" class:typewriter bind:this={scroller}>
-    <div class="draw-host">
-      <Editor {onReady} {onChange} {onSelect} focus={focusMode} reveal={revealMode} {revealCount} />
-      <Drawing active={drawMode} bind:shapes={drawings} on:change={onDrawChange} onExit={() => drawMode = false} />
+  <div class="editor-area">
+    {#if showFind}
+      <FindBar bind:this={findBar} {editor} onClose={() => showFind = false} />
+    {/if}
+
+    <div class="editor-scroll" class:typewriter bind:this={scroller}>
+      <div class="draw-host">
+        <Editor {onReady} {onChange} {onSelect} focus={focusMode} reveal={revealMode} {revealCount} />
+        <Drawing active={drawMode} bind:shapes={drawings} on:change={onDrawChange} onExit={() => drawMode = false} />
+      </div>
     </div>
   </div>
 
@@ -777,6 +820,10 @@
 
   {#if showVersions}
     <VersionHistory {versions} onView={viewVersion} onDelete={deleteVersion} onClose={() => showVersions = false} />
+  {/if}
+
+  {#if showRecovery}
+    <Recovery {filePath} onOpen={openByPath} onRollback={rollbackTo} onClose={() => showRecovery = false} />
   {/if}
 
   {#if viewingVersion}

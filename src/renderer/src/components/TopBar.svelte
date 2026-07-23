@@ -31,6 +31,7 @@
   export let onRename = () => {}
   export let onOpenDoc = () => {}
   export let onVersions = () => {}
+  export let onRecover = () => {}
   export let drawing = false
   export let onDraw = () => {}
   export let favText = []
@@ -108,6 +109,7 @@
           <button on:click={() => fileDo(onSaveAs)}>Save as… (move)</button>
           <button on:click={() => fileDo(onSaveCopy)}>Save a copy…</button>
           <button on:click={() => fileDo(onVersions)}>Version history…</button>
+          <button on:click={() => fileDo(onRecover)}>Recover documents…</button>
           <button class="danger" on:click={() => fileDo(onDeleteDoc)}>Delete document…</button>
           <div class="menu-sep"></div>
           <button on:click={() => fileDo(() => onExport('pdf'))}>Export PDF — current style</button>
@@ -164,7 +166,9 @@
     <button class:on={s.h1} on:click={cmd(c => c.toggleHeading({ level: 1 }))} title="Heading 1">H1</button>
     <button class:on={s.h2} on:click={cmd(c => c.toggleHeading({ level: 2 }))} title="Heading 2">H2</button>
     <button class:on={s.sub} on:click={cmd(c => c.toggleHeading({ level: 3 }))} title="Subtitle (small)">Sub</button>
-    <button class:on={s.quote} on:click={cmd(c => c.toggleBlockquote())} title="Quote">&ldquo;</button>
+    <button class:on={s.quote} on:click={cmd(c => c.toggleBlockquote())} title="Quote">
+      <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor"><path d="M6.5 6C4 6 2.5 8 2.5 10.4c0 2.2 1.6 3.8 3.7 3.8.5 0 .9-.1 1.2-.2-.4 2-1.8 3.4-3.7 4l.7 2c3.6-1.1 6.1-4.4 6.1-8.4C10.5 8.3 8.8 6 6.5 6z"/><path d="M17.5 6c-2.5 0-4 2-4 4.4 0 2.2 1.6 3.8 3.7 3.8.5 0 .9-.1 1.2-.2-.4 2-1.8 3.4-3.7 4l.7 2c3.6-1.1 6.1-4.4 6.1-8.4C21.5 8.3 19.8 6 17.5 6z"/></svg>
+    </button>
     <button class:on={s.bullet} on:click={cmd(c => c.toggleBulletList())} title="Bullet list">&bull;</button>
     <button class:on={s.ordered} on:click={cmd(c => c.toggleOrderedList())} title="Numbered list">1.</button>
     <span class="sep"></span>
@@ -173,7 +177,9 @@
     <button class:on={s.right} on:click={cmd(c => c.setTextAlign('right'))} title="Align right"><span class="ali ali-right"></span></button>
     <span class="sep"></span>
     <div class="tablewrap">
-      <button class:on={editor?.isActive('table')} on:click={() => showTable = !showTable} title="Table">TABLE</button>
+      <button class:on={editor?.isActive('table')} on:click={() => showTable = !showTable} title="Table">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="9.5" x2="21" y2="9.5"/><line x1="9.5" y1="9.5" x2="9.5" y2="20"/><line x1="15.5" y1="9.5" x2="15.5" y2="20"/></svg>
+      </button>
       {#if showTable}
         <div class="menu tablemenu">
           <div class="grid-label">{hc && hr ? `${hc} × ${hr}` : 'Insert table'}</div>
@@ -203,7 +209,9 @@
       <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
     </button>
     <span class="sep"></span>
-    <button on:click={clearFormat} title="Clear formatting — reset selection to the Style default">CLEAR</button>
+    <button on:click={clearFormat} title="Clear formatting — reset selection to the Style default">
+      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 21l-4.3-4.3a1.9 1.9 0 0 1 0-2.7l9.6-9.6a1.9 1.9 0 0 1 2.7 0l5.6 5.6a1.9 1.9 0 0 1 0 2.7L13 21"/><line x1="21" y1="21" x2="7" y2="21"/><line x1="5" y1="11" x2="14" y2="20"/></svg>
+    </button>
     <input type="file" accept="image/*" bind:this={fileInput} on:change={onImageFile} style="display:none" />
 
     <div class="zoom">

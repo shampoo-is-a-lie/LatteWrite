@@ -8,7 +8,8 @@ import { startAuthFlow, signOut, isAuthenticated } from './auth.js'
 import { syncBundle as gdriveSync, removeRemote as gdriveRemove, renameRemote as gdriveRename, twoWaySync as gdriveTwoWay } from './drive.js'
 import { syncBundle as onedriveSync } from './onedrive.js'
 import { readBundle } from './bundle.js'
-import { saveDocument } from './autosave.js'
+import { saveDocument, mirrorPathFor } from './autosave.js'
+import { listRecoverable, restoreFile, listSnapshots } from './recovery.js'
 import { exportHTML, exportMarkdown, exportDocx } from './export.js'
 import { loadFontCss, fontCatalog } from './fonts.js'
 
@@ -226,6 +227,23 @@ ipcMain.handle('doc:rename', async (_e, { filePath, name, soft }) => {
     target = join(dirname(filePath), `${clean}_${Date.now()}.latte`)
   }
   fs.renameSync(filePath, target)
+  // Carry the mirror twin and the snapshot history across, or the old ones would
+  // look like a document that vanished and clutter the recovery list.
+  try {
+    const from = mirrorPathFor(filePath)
+    if (fs.existsSync(from)) fs.renameSync(from, mirrorPathFor(target))
+  } catch { /* the next save rewrites it anyway */ }
+  try {
+    const oldBase = basename(filePath, '.latte')
+    const newBase = basename(target, '.latte')
+    const bdir = join(dirname(filePath), '.backups')
+    if (fs.existsSync(bdir)) {
+      for (const f of fs.readdirSync(bdir)) {
+        const m = f.match(/^(.*)_(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})\.latte$/)
+        if (m && m[1] === oldBase) fs.renameSync(join(bdir, f), join(bdir, `${newBase}_${m[2]}.latte`))
+      }
+    }
+  } catch { /* history keeps the old name; harmless */ }
   store.set('recentFiles', store.get('recentFiles').map(f => f === filePath ? target : f))
   store.set('currentFile', target)
   // Rename the Drive copy in place so the cloud tracks the new name.
@@ -235,7 +253,9 @@ ipcMain.handle('doc:rename', async (_e, { filePath, name, soft }) => {
 })
 
 // Send the current file (and its rolling backups) to the OS trash. Trash rather
-// than unlink so a mistaken delete is recoverable from the system trash.
+// than unlink so a mistaken delete is recoverable from the system trash. The
+// .mirror twin is deliberately left behind — it is the copy that survives
+// anything, including a delete that came from the other side of a sync.
 ipcMain.handle('doc:delete', async (_e, filePath) => {
   if (!filePath || !fs.existsSync(filePath)) return { ok: true }
   try { await shell.trashItem(filePath) } catch { try { fs.unlinkSync(filePath) } catch {} }
@@ -258,6 +278,40 @@ ipcMain.handle('doc:delete', async (_e, filePath) => {
 
 // Reveal the default documents folder in the host file manager.
 ipcMain.handle('doc:openFolder', () => { shell.openPath(docsDir()); return true })
+
+// ── Recovery ─────────────────────────────────────────────────────────────────
+// Documents that are gone from the latte folder but still exist as a mirror
+// twin, in the OS trash, or as a .backups snapshot.
+ipcMain.handle('recover:list', () => {
+  try { return listRecoverable(docsDir()) } catch (e) { return { error: String(e.message || e) } }
+})
+
+ipcMain.handle('recover:restore', (_e, { file, origin }) => {
+  try {
+    const target = restoreFile(file, origin)
+    addRecent(target)
+    return { filePath: target }
+  } catch (e) { return { error: String(e.message || e) } }
+})
+
+// Per-save snapshots of one document (plus its mirror), for rolling back an edit.
+ipcMain.handle('recover:snapshots', (_e, filePath) => {
+  try { return filePath ? listSnapshots(filePath) : [] } catch { return [] }
+})
+
+// Read any recovered copy so the renderer can load it into the open document.
+ipcMain.handle('recover:read', (_e, file) => {
+  try { return readBundle(file) } catch (e) { return { error: String(e.message || e) } }
+})
+
+// Drop a mirror twin the user doesn't want back (the only way one is removed).
+ipcMain.handle('recover:discard', async (_e, file) => {
+  try {
+    fs.chmodSync(file, 0o644)
+    await shell.trashItem(file)
+    return { ok: true }
+  } catch (e) { return { error: String(e.message || e) } }
+})
 
 // Create an autosaved draft in the latte folder immediately (unique name).
 ipcMain.handle('doc:autoNew', (_e, { doc, meta }) => {
