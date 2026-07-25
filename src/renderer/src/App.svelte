@@ -13,6 +13,7 @@
   import VersionViewer from './components/VersionViewer.svelte'
   import Recovery from './components/Recovery.svelte'
   import FindBar from './components/FindBar.svelte'
+  import Outline from './components/Outline.svelte'
   import { applyStyle } from './theme.js'
   import { STYLES, DEFAULT_STYLE, isBuiltin, cloneStyle } from './styles.js'
   import { fontStack, ensureFontLoaded } from './fonts.js'
@@ -76,6 +77,47 @@
   let viewingVersion = null   // a snapshot opened in the read-only viewer window
   let showFind = false
   let findBar
+  let showNav = false
+
+  // Document outline (H1/H2). Recomputed on every doc/selection change via `bump`,
+  // but only while the navigator is open so idle keystrokes stay cheap.
+  $: outline = showNav ? buildOutline(editor, bump) : []
+  $: activeHeadingPos = showNav ? activeHeading(outline, editor, bump) : -1
+
+  function buildOutline(ed, _bump) {
+    if (!ed) return []
+    const items = []
+    ed.state.doc.descendants((node, pos) => {
+      if (node.type.name === 'heading' && (node.attrs.level === 1 || node.attrs.level === 2)) {
+        items.push({ pos, level: node.attrs.level, text: node.textContent.trim() })
+      }
+    })
+    return items
+  }
+
+  // The heading the caret currently sits in — the last one at or before the head.
+  function activeHeading(list, ed, _bump) {
+    if (!ed || !list.length) return -1
+    const head = ed.state.selection.head
+    let best = -1
+    for (const it of list) { if (it.pos <= head) best = it.pos; else break }
+    return best
+  }
+
+  // Jump the scroller to a heading, parking it a little below the top edge.
+  function goToHeading(pos) {
+    if (!editor || !scroller) return
+    let dom = null
+    try { dom = editor.view.nodeDOM(pos) } catch {}
+    if (!dom || dom.nodeType !== 1) {
+      try { dom = editor.view.domAtPos(pos + 1).node; if (dom && dom.nodeType === 3) dom = dom.parentElement } catch {}
+    }
+    if (!dom) return
+    const rect = scroller.getBoundingClientRect()
+    const y = dom.getBoundingClientRect().top - rect.top + scroller.scrollTop
+    scroller.scrollTo({ top: Math.max(0, y - 90), behavior: 'smooth' })
+    editor.commands.setTextSelection(pos + 1)   // moves the "you are here" marker
+  }
 
   async function openFind() {
     // Seed from the selection, the way every other editor does.
@@ -716,6 +758,7 @@
     else if (revealMode && e.key === 'PageUp') { e.preventDefault(); revealPrev() }
     else if (e.key === 'Escape') {
       if (dialog) return                       // a confirm is open — let it handle Esc
+      else if (showNav) showNav = false
       else if (showFind) showFind = false
       else if (showRecovery) showRecovery = false
       else if (viewingVersion) closeViewer()
@@ -792,6 +835,12 @@
         <Drawing active={drawMode} bind:shapes={drawings} on:change={onDrawChange} onExit={() => drawMode = false} />
       </div>
     </div>
+
+    <Outline
+      {outline} activePos={activeHeadingPos} {fullscreen} {chromeHidden}
+      bind:open={showNav}
+      onToggle={() => showNav = !showNav} onClose={() => showNav = false}
+      onGo={goToHeading} />
   </div>
 
   <PresentationBar
