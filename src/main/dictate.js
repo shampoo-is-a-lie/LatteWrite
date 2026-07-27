@@ -60,8 +60,33 @@ function argvFor(bin) {
   // --no-type is essential: without it Latte Dictate ALSO types the text into
   // the focused window with ydotool, so every phrase would land twice - once
   // from us and once from it.
-  const args = ['--serve', '--no-type', '--no-tray', '--port', String(PORT)]
+  //
+  // The tray is left ON deliberately. Being driven by LatteWrite is not a
+  // reason to hide it: it is the only affordance showing dictation is running
+  // and the only way to stop it if this window loses track of the child.
+  const args = ['--serve', '--no-type', '--port', String(PORT)]
   return bin.endsWith('.py') ? ['python3', [bin, ...args]] : [bin, args]
+}
+
+// "start" is deferred until a Chrome page has actually connected. Sending it
+// too early makes Latte Dictate conclude no page is open and launch a SECOND
+// window on top of the one still starting up.
+let pendingStart = false
+let startTimer = null
+let pollTimer = null
+
+function clearPending() {
+  pendingStart = false
+  clearTimeout(startTimer)
+  clearInterval(pollTimer)
+  startTimer = null
+  pollTimer = null
+}
+
+function reallyStart() {
+  if (!pendingStart) return
+  clearPending()
+  send({ cmd: 'start' })
 }
 
 function handleLine(line) {
@@ -69,6 +94,8 @@ function handleLine(line) {
   if (!line) return
   let ev
   try { ev = JSON.parse(line) } catch { return }
+  // ready/state carry a snapshot; anything >= 1 means a page is live.
+  if (pendingStart && typeof ev.connected === 'number' && ev.connected >= 1) reallyStart()
   onEvent(ev)
 }
 
@@ -123,12 +150,27 @@ function send(msg) {
 }
 
 export function setListening(on, emit) {
-  if (on && !ensure(emit)) return false
-  return send({ cmd: on ? 'start' : 'stop' })
+  if (!on) {
+    clearPending()
+    return send({ cmd: 'stop' })
+  }
+  if (!ensure(emit)) return false
+  clearPending()
+  pendingStart = true
+  // Poll rather than wait for one event: the page POSTs "ready" BEFORE it
+  // subscribes to the event stream, so the connected count is still 0 at that
+  // moment and a single ready/state would start us too early - which is what
+  // opened a second window.
+  send({ cmd: 'status' })
+  pollTimer = setInterval(() => send({ cmd: 'status' }), 400)
+  // Cold start with no page ever arriving - go anyway rather than hang.
+  startTimer = setTimeout(reallyStart, 20000)
+  return true
 }
 
 /** Called on app quit. Closing stdin is enough, but ask politely first. */
 export function shutdown() {
+  clearPending()
   if (!child) return
   send({ cmd: 'quit' })
   try { child.stdin.end() } catch {}
