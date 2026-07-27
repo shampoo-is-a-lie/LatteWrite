@@ -662,11 +662,19 @@
     // never a trailing one — that is how a phrase starting with "comma"
     // attaches to the previous word. Trimming it, or adding a space of our
     // own, breaks spacing for every phrase after the first.
-    editor.chain().insertContentAt({ from, to }, dictHtml(text))
-      .unsetColor().run()
-    // Position from the resulting selection rather than string length: newlines
-    // become block nodes, so the two no longer agree.
-    dictAnchor = editor.state.selection.to
+    editor.chain().insertContentAt({ from, to }, dictHtml(text)).run()
+
+    // Committed text must lose the grey the interim preview left at this
+    // position, which the insertion inherits. This has to be a second chain
+    // over an explicit range: insertContentAt leaves the selection collapsed at
+    // the end, and unsetColor() on a collapsed selection only sets stored marks
+    // for whatever is typed NEXT — it does not touch the text just inserted.
+    // The end is read from state rather than computed from string length,
+    // because "new paragraph" becomes a block node and the two disagree.
+    const end = editor.state.selection.to
+    editor.chain().setTextSelection({ from, to: end }).unsetColor()
+      .setTextSelection(end).run()
+    dictAnchor = end
     dictLen = 0
   }
 

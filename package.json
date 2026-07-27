@@ -1,6 +1,6 @@
 {
   "name": "lattewrite",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "description": "A beautiful, themeable, presentation-first word processor",
   "main": "out/main/index.js",
   "author": "shampoo-is-a-lie",
@@ -12,7 +12,7 @@
     "web:dev": "vite -c web/vite.config.mjs",
     "web:build": "vite build -c web/vite.config.mjs",
     "dist": "electron-vite build && electron-builder --linux AppImage",
-    "postdist": "mkdir -p ~/LatteWrite && for f in dist/*.AppImage; do b=$(basename \"$f\"); [ -f ~/LatteWrite/\"$b\" ] && mv -f ~/LatteWrite/\"$b\" ~/LatteWrite/\"${b%.AppImage}_old.AppImage\"; cp \"$f\" ~/LatteWrite/\"$b\"; done && echo \"Deployed to ~/LatteWrite\""
+    "postdist": "mkdir -p ~/LatteWrite; b=\"LatteWrite-${npm_package_version}.AppImage\"; if [ -f ~/LatteWrite/\"$b\" ]; then mv -f ~/LatteWrite/\"$b\" ~/LatteWrite/\"${b%.AppImage}_old.AppImage\"; fi; cp \"dist/$b\" ~/LatteWrite/\"$b\" && echo \"Deployed $b to ~/LatteWrite\""
   },
   "dependencies": {
     "@fontsource/architects-daughter": "^5.2.7",
