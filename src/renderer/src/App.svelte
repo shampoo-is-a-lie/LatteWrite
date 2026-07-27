@@ -1,5 +1,5 @@
 <script>
-  import { onMount, tick } from 'svelte'
+  import { onMount, onDestroy, tick } from 'svelte'
   import { EditorState } from '@tiptap/pm/state'
   import Editor from './components/Editor.svelte'
   import TopBar from './components/TopBar.svelte'
@@ -18,7 +18,6 @@
   import { STYLES, DEFAULT_STYLE, isBuiltin, cloneStyle } from './styles.js'
   import { fontStack, ensureFontLoaded } from './fonts.js'
   import { DEFAULT_TEXT_COLORS, DEFAULT_HL_COLORS } from './colors.js'
-  import { createDictation } from './dictation.js'
 
   let settings = {}
   let editor = null
@@ -53,10 +52,6 @@
   let chromeHidden = false
   let dictating = false
   let dictLabel = ''
-  let dictationCtl = null
-  let dictRestarting = false
-  let dictAutoRestarts = 0
-  let audioInputs = []
   let dictAnchor = null
   let dictLen = 0
 
@@ -221,7 +216,9 @@
   $: customSet = new Set(Object.keys(customStyles))
   $: editingLabel = draft ? draftBase + ' (unsaved copy)' : style
 
-  $: micAvailable = (settings.dictationEngine || 'whisper') === 'whisper'
+  // Set once at startup: whether the Latte Dictate app was found on disk.
+  let micAvailable = false
+  onDestroy(wireDictation())
 
   // Window title (what KDE shows in the taskbar) reflects the current document.
   // Electron mirrors the page title to the native window title automatically.
@@ -637,6 +634,14 @@
   function greyColor() { return getComputedStyle(document.documentElement).getPropertyValue('--muted').trim() || '#888888' }
   function esc(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') }
 
+  // Latte Dictate emits \n for "new line" and \n\n for "new paragraph". A bare
+  // newline inside an HTML string collapses to a space, so build real markup.
+  function dictHtml(text) {
+    const paras = esc(text).split(/\n{2,}/)
+    if (paras.length === 1) return paras[0].replace(/\n/g, '<br>')
+    return paras.map(p => `<p>${p.replace(/\n/g, '<br>')}</p>`).join('')
+  }
+
   function dictInterim(text) {
     if (!editor || !text) return
     if (dictAnchor == null) dictAnchor = editor.state.selection.to
@@ -650,14 +655,18 @@
 
   function dictCommit(text) {
     if (!editor || !text) return
-    dictAutoRestarts = 0   // a successful commit means the engine is healthy again
     if (dictAnchor == null) dictAnchor = editor.state.selection.to
     const from = clampPos(dictAnchor)
     const to = clampPos(dictAnchor + dictLen)
-    const out = text.replace(/\s+$/, '') + ' '
-    editor.chain().insertContentAt({ from, to }, esc(out)).setTextSelection({ from, to: from + out.length })
-      .unsetColor().setTextSelection(from + out.length).run()
-    dictAnchor = from + out.length
+    // Inserted verbatim. Latte Dictate's punctuator emits a LEADING space and
+    // never a trailing one — that is how a phrase starting with "comma"
+    // attaches to the previous word. Trimming it, or adding a space of our
+    // own, breaks spacing for every phrase after the first.
+    editor.chain().insertContentAt({ from, to }, dictHtml(text))
+      .unsetColor().run()
+    // Position from the resulting selection rather than string length: newlines
+    // become block nodes, so the two no longer agree.
+    dictAnchor = editor.state.selection.to
     dictLen = 0
   }
 
@@ -671,62 +680,54 @@
     dictLen = 0
   }
 
-  async function beginDictation() {
-    dictationCtl = createDictation(settings.dictationEngine || 'whisper', { deviceId: settings.audioDeviceId, model: settings.whisperModel })
-    await dictationCtl.start(dictInterim, dictCommit, (s) => { dictLabel = s }, onDictError)
-  }
-
-  // The engine reported it's wedged (WebGPU device loss / repetition loop).
-  // Restart it automatically — same effect as reopening the app.
-  function onDictError() {
-    if (!dictating || dictRestarting) return
-    if (++dictAutoRestarts > 3) {
-      dictationCtl?.stop()
-      dictating = false; dictLabel = ''; dictAnchor = null; dictLen = 0
-      showAlert('Dictation', 'The speech engine kept failing and was stopped. Try again, or pick a different mic/model in Settings.')
-      return
-    }
-    restartDictation()
-  }
-
-  // Tear the engine down and load a fresh one, keeping the cursor where it was.
-  // If the GPU session is dead, the reload falls back to CPU on its own.
-  async function restartDictation() {
-    if (dictRestarting || !dictating) return
-    dictRestarting = true
-    try { dictationCtl?.stop() } catch {}
-    settleInterim()
-    dictLabel = 'RESTARTING…'
-    await new Promise(r => setTimeout(r, 200))   // let the mic device release
-    try {
-      await beginDictation()
-    } catch (e) {
-      dictating = false; dictLabel = ''; showAlert('Dictation', e.message)
-    }
-    dictRestarting = false
+  // Events from the Latte Dictate child process. Registered once; the returned
+  // function unsubscribes on destroy.
+  function wireDictation() {
+    return window.api.dictate.onEvent((ev) => {
+      switch (ev.event) {
+        case 'interim':
+          if (dictating) dictInterim(ev.text)
+          break
+        case 'final':
+          if (dictating) dictCommit(ev.text)
+          break
+        case 'ready':
+        case 'state':
+          if (dictating) dictLabel = ev.listening ? 'LISTENING' : 'STARTING…'
+          break
+        case 'error':
+          showAlert('Dictation', ev.text || 'Latte Dictate reported an error.')
+          break
+        case 'bye':
+        case 'exit':
+          // The child died or was shut down; do not leave the button lit.
+          if (dictating) {
+            settleInterim()
+            dictating = false; dictAnchor = null; dictLen = 0
+          }
+          dictLabel = ''
+          break
+      }
+    })
   }
 
   async function toggleDictate() {
     if (dictating) {
-      dictationCtl?.stop()
+      await window.api.dictate.setListening(false)
       settleInterim()
       dictating = false; dictLabel = ''; dictAnchor = null; dictLen = 0
       return
     }
-    if (!micAvailable) return
-    try {
-      dictating = true; dictAnchor = null; dictLen = 0; dictAutoRestarts = 0
-      await beginDictation()
-    } catch (e) { dictating = false; dictLabel = ''; showAlert('Dictation', e.message) }
-  }
-
-  async function enumerateAudioInputs() {
-    try {
-      const s = await navigator.mediaDevices.getUserMedia({ audio: true })
-      s.getTracks().forEach(t => t.stop())
-    } catch {}
-    const devices = await navigator.mediaDevices.enumerateDevices()
-    audioInputs = devices.filter(d => d.kind === 'audioinput').map(d => ({ deviceId: d.deviceId, label: d.label || 'Microphone' }))
+    // Anchor at the caret so text lands where the cursor is, not where it was.
+    dictAnchor = null; dictLen = 0
+    dictLabel = 'STARTING…'
+    const ok = await window.api.dictate.setListening(true)
+    if (!ok) {
+      dictLabel = ''
+      showAlert('Dictation', 'Latte Dictate was not found. Install its AppImage next to LatteWrite (in ~/LatteWrite) and try again.')
+      return
+    }
+    dictating = true
   }
 
   // ── Settings & auth ──────────────────────────────────────────────────────────
@@ -736,7 +737,7 @@
     catch (e) { showAlert('Cloud sync', 'Could not connect: ' + e.message) }
   }
   async function disconnectDrive() { await window.api.auth.signOut(); connected = false }
-  function openSettings() { enumerateAudioInputs(); showSettings = true }
+  function openSettings() { showSettings = true }
 
   function onKey(e) {
     const ctrl = e.ctrlKey || e.metaKey
@@ -768,6 +769,7 @@
   }
 
   onMount(async () => {
+    micAvailable = await window.api.dictate.available()
     settings = await window.api.settings.get()
     customStyles = settings.customStyles || {}
     // Styles promoted to built-ins shed their stale per-install custom copies.
@@ -846,7 +848,7 @@
   <PresentationBar
     {dictating} {dictLabel} {fullscreen} {chromeHidden} {saving} {micAvailable}
     {typewriter} {focusMode} {revealMode} {revealCount} {revealTotal}
-    onDictate={toggleDictate} onRestartDictate={restartDictation} onPresent={toggleFullscreen} onToggleChrome={toggleChrome}
+    onDictate={toggleDictate} onPresent={toggleFullscreen} onToggleChrome={toggleChrome}
     onToggleTypewriter={toggleTypewriter} onToggleFocus={toggleFocus} onToggleReveal={toggleReveal}
     onRevealNext={revealNext} onRevealPrev={revealPrev} />
 
@@ -856,7 +858,7 @@
       onRename={renameStyle} onClose={() => showStyles = false} />
   {/if}
   {#if showSettings}
-    <Settings {settings} {connected} inputs={audioInputs}
+    <Settings {settings} {connected}
       headingFamily={curObj.fonts.heading} bodyFamily={curObj.fonts.body} codeFamily={curObj.fonts.code}
       tokens={curObj.tokens} measure={curObj.measure} dark={curObj.dark}
       isDraft={!!draft} {editingLabel}

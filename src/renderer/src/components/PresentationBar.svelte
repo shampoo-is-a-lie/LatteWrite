@@ -11,7 +11,6 @@
   export let revealCount = 1
   export let revealTotal = 0
   export let onDictate = () => {}
-  export let onRestartDictate = () => {}
   export let onPresent = () => {}
   export let onToggleChrome = () => {}
   export let onToggleTypewriter = () => {}
@@ -39,14 +38,9 @@
   </div>
 
   <button class="pill" class:on={dictating} disabled={!micAvailable}
-          title={micAvailable ? 'Dictate (Ctrl+D)' : 'Dictation unavailable'} on:click={onDictate}>
+          title={micAvailable ? 'Dictate (Ctrl+D)' : 'Latte Dictate is not installed'} on:click={onDictate}>
     <span class="mic"></span>{dictating ? (dictLabel || 'LISTENING') : 'DICTATE'}
   </button>
-  {#if dictating}
-    <button class="pill icon" on:click={onRestartDictate} title="Restart the speech engine (if it stopped responding)">
-      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v5h-5"/></svg>
-    </button>
-  {/if}
   <button class="pill" on:click={onToggleChrome} title="Hide interface (Ctrl+Shift+H)">
     {chromeHidden ? 'SHOW UI' : 'HIDE UI'}
   </button>

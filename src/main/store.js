@@ -34,10 +34,8 @@ const store = new Store({
     focusMode: false,    // dim every paragraph but the caret's
     revealMode: false,   // teleprompter: reveal blocks one at a time
 
-    // Dictation: 'webspeech' (online, free) or 'whisper' (offline, local)
-    dictationEngine: 'whisper',
-    whisperModel: 'onnx-community/whisper-base.en',
-    audioDeviceId: '',
+    // Dictation runs in the sibling Latte Dictate app, which owns the engine,
+    // the microphone and the language model. Nothing to configure here.
 
     // Sync
     syncProvider: 'none', // 'none' | 'gdrive' | 'onedrive'

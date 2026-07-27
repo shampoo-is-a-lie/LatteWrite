@@ -9,7 +9,6 @@
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
-    "predist": "bash scripts/fetch-whisper.sh",
     "web:dev": "vite -c web/vite.config.mjs",
     "web:build": "vite build -c web/vite.config.mjs",
     "dist": "electron-vite build && electron-builder --linux AppImage",
@@ -70,7 +69,6 @@
     "@fontsource/unbounded": "^5.2.8",
     "@fontsource/vt323": "^5.2.7",
     "@fontsource/work-sans": "^5.2.8",
-    "@huggingface/transformers": "^3.8.1",
     "@tiptap/core": "^2.11.5",
     "@tiptap/extension-color": "^2.11.5",
     "@tiptap/extension-font-family": "^2.11.5",
@@ -116,10 +114,6 @@
       "out/**/*"
     ],
     "extraResources": [
-      {
-        "from": "resources/whisper",
-        "to": "whisper"
-      },
       {
         "from": "resources/icon.png",
         "to": "icon.png"

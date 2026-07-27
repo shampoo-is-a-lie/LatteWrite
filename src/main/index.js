@@ -1,4 +1,4 @@
-import { app, shell, BrowserWindow, ipcMain, dialog, session, protocol, clipboard, nativeImage } from 'electron'
+import { app, shell, BrowserWindow, ipcMain, dialog, session, clipboard, nativeImage } from 'electron'
 import { join, dirname, basename, extname, relative, isAbsolute } from 'path'
 import { spawn } from 'child_process'
 import fs from 'fs'
@@ -12,26 +12,9 @@ import { saveDocument, mirrorPathFor } from './autosave.js'
 import { listRecoverable, restoreFile, listSnapshots } from './recovery.js'
 import { exportHTML, exportMarkdown, exportDocx } from './export.js'
 import { loadFontCss, fontCatalog } from './fonts.js'
+import { available as dictateAvailable, setListening as dictateSet, shutdown as dictateShutdown } from './dictate.js'
 
 const FILTERS = [{ name: 'LatteWrite', extensions: ['latte'] }]
-
-// Enable WebGPU for local Whisper acceleration. On Linux + NVIDIA, Chromium
-// blocklists the GPU by default, so we bypass the blocklist and force Vulkan.
-// transformers.js falls back to CPU/WASM if this doesn't take.
-app.commandLine.appendSwitch('enable-unsafe-webgpu')
-app.commandLine.appendSwitch('enable-features', 'Vulkan')
-app.commandLine.appendSwitch('ignore-gpu-blocklist')
-
-// Serves the bundled Whisper model + ORT wasm to the renderer so dictation runs
-// offline. Must be registered as a privileged (standard, fetchable) scheme
-// before app-ready; the handler is installed in whenReady below.
-protocol.registerSchemesAsPrivileged([
-  { scheme: 'latte-asset', privileges: { standard: true, secure: true, supportFetchAPI: true, bypassCSP: true } }
-])
-const ASSET_MIME = { '.wasm': 'application/wasm', '.mjs': 'text/javascript', '.json': 'application/json', '.onnx': 'application/octet-stream', '.txt': 'text/plain' }
-function whisperBase() {
-  return app.isPackaged ? join(process.resourcesPath, 'whisper') : join(__dirname, '../../resources/whisper')
-}
 
 // A .latte passed on the command line (file association / "open with"). Consumed
 // once by the renderer on startup.
@@ -547,6 +530,16 @@ ipcMain.handle('window:maximize', () => { mainWindow.isMaximized() ? mainWindow.
 ipcMain.handle('window:close', () => mainWindow.close())
 ipcMain.handle('window:isMaximized', () => mainWindow.isMaximized())
 
+// ── Dictation ─────────────────────────────────────────────────────────────────
+// Latte Dictate runs as a child process; events are pushed straight to the
+// renderer, which turns them into grey interim text and committed text.
+ipcMain.handle('dictate:available', () => dictateAvailable())
+ipcMain.handle('dictate:setListening', (_e, on) =>
+  dictateSet(on, (ev) => mainWindow && !mainWindow.isDestroyed()
+    && mainWindow.webContents.send('dictate:event', ev)))
+
+app.on('before-quit', () => dictateShutdown())
+
 // ── Window ────────────────────────────────────────────────────────────────────
 ipcMain.handle('window:presentation', () => {
   const on = !mainWindow.isFullScreen()
@@ -555,26 +548,6 @@ ipcMain.handle('window:presentation', () => {
 })
 
 app.whenReady().then(() => {
-  protocol.handle('latte-asset', async (request) => {
-    const u = new URL(request.url)
-    const base = whisperBase()
-    const filePath = join(base, decodeURIComponent(u.host + u.pathname))
-    if (!filePath.startsWith(base)) return new Response('forbidden', { status: 403 })
-    try {
-      const data = await fs.promises.readFile(filePath)
-      const ext = filePath.slice(filePath.lastIndexOf('.'))
-      return new Response(data, { headers: { 'Content-Type': ASSET_MIME[ext] || 'application/octet-stream', 'Access-Control-Allow-Origin': '*' } })
-    } catch {
-      return new Response('not found', { status: 404 })
-    }
-  })
-
-  // Without this, Electron silently denies getUserMedia, so dictation never
-  // gets microphone access.
-  const MEDIA = ['media', 'audioCapture', 'microphone']
-  session.defaultSession.setPermissionRequestHandler((_wc, permission, cb) => cb(MEDIA.includes(permission)))
-  session.defaultSession.setPermissionCheckHandler((_wc, permission) => MEDIA.includes(permission))
-
   createWindow()
   maybeStartupSync()   // pull anything the other device changed, once per launch
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow() })

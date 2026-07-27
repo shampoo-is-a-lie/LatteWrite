@@ -76,6 +76,15 @@ contextBridge.exposeInMainWorld('api', {
       return () => ipcRenderer.off('context-menu', listener)
     }
   },
+  dictate: {
+    available: () => ipcRenderer.invoke('dictate:available'),
+    setListening: (on) => ipcRenderer.invoke('dictate:setListening', on),
+    onEvent: (cb) => {
+      const listener = (_e, ev) => cb(ev)
+      ipcRenderer.on('dictate:event', listener)
+      return () => ipcRenderer.off('dictate:event', listener)
+    }
+  },
   window: {
     togglePresentation: () => ipcRenderer.invoke('window:presentation'),
     newWindow: () => ipcRenderer.invoke('window:new'),

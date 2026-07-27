@@ -5,7 +5,6 @@
   import { fontStack } from '../fonts.js'
   export let settings = {}
   export let connected = false
-  export let inputs = []
   export let headingFamily = ''
   export let bodyFamily = ''
   export let codeFamily = ''
@@ -29,9 +28,6 @@
   let clientSecret = settings.oauthClientSecret || ''
   let syncProvider = settings.syncProvider || 'none'
   let syncOnSave = !!settings.syncOnSave
-  let dictationEngine = settings.dictationEngine || 'whisper'
-  let whisperModel = settings.whisperModel || 'onnx-community/whisper-base.en'
-  let audioDeviceId = settings.audioDeviceId || ''
   let backupsToKeep = settings.backupsToKeep ?? 10
   let bg = settings.bgEffect || 'none'
   const BACKGROUNDS = ['none', 'gradient', 'glow', 'aurora', 'grid', 'dots', 'vignette']
@@ -54,21 +50,11 @@
     ['accent', 'Accent'], ['caret', 'Caret'], ['rule', 'Rule']
   ]
 
-  const ENGINE_OPTS = [
-    { value: 'whisper', label: 'Local Whisper (offline, recommended)' },
-    { value: 'webspeech', label: 'Web Speech (online — unreliable in Electron)' }
-  ]
-  const MODEL_OPTS = [
-    { value: 'onnx-community/whisper-tiny.en', label: 'Tiny — fastest, lower accuracy' },
-    { value: 'onnx-community/whisper-base.en', label: 'Base — balanced' },
-    { value: 'onnx-community/whisper-small.en', label: 'Small — most accurate, slowest' }
-  ]
   const PROVIDER_OPTS = [
     { value: 'none', label: 'None' },
     { value: 'gdrive', label: 'Google Drive' },
     { value: 'onedrive', label: 'OneDrive (phase 2)' }
   ]
-  $: micOpts = [{ value: '', label: 'System default' }, ...inputs.map(d => ({ value: d.deviceId, label: d.label }))]
 
   let shortcutQuery = ''
   const SHORTCUTS = [
@@ -121,34 +107,13 @@
   })()
 
   function apply() {
-    onPatch({ oauthClientId: clientId, oauthClientSecret: clientSecret, syncProvider, syncOnSave, dictationEngine, whisperModel, audioDeviceId, backupsToKeep: Number(backupsToKeep) })
+    onPatch({ oauthClientId: clientId, oauthClientSecret: clientSecret, syncProvider, syncOnSave, backupsToKeep: Number(backupsToKeep) })
   }
 
-  let micLevel = 0
-  let micTesting = false
-  async function testMic() {
-    if (micTesting) { micTesting = false; return }
-    micTesting = true
-    let stream
-    try {
-      stream = await navigator.mediaDevices.getUserMedia({ audio: audioDeviceId ? { deviceId: { exact: audioDeviceId } } : true })
-    } catch (e) { micTesting = false; gpuMsg = 'Mic error: ' + e.message; return }
-    const ctx = new AudioContext()
-    const an = ctx.createAnalyser()
-    an.fftSize = 512
-    ctx.createMediaStreamSource(stream).connect(an)
-    const buf = new Uint8Array(an.fftSize)
-    const t0 = performance.now()
-    const frame = () => {
-      an.getByteTimeDomainData(buf)
-      let sum = 0
-      for (let i = 0; i < buf.length; i++) { const v = (buf[i] - 128) / 128; sum += v * v }
-      micLevel = Math.min(1, Math.sqrt(sum / buf.length) * 5)
-      if (micTesting && performance.now() - t0 < 8000) requestAnimationFrame(frame)
-      else { micTesting = false; micLevel = 0; stream.getTracks().forEach(t => t.stop()); ctx.close() }
-    }
-    requestAnimationFrame(frame)
-  }
+
+  // Whether the sibling Latte Dictate app is on disk; drives the note below.
+  let dictateFound = false
+  window.api.dictate.available().then((v) => { dictateFound = v })
 
   let pane = 'style'
   let fontModal = null // 'heading' | 'body' | null
@@ -196,17 +161,6 @@
       : (res?.error || 'Could not add the shortcut.')
   }
 
-  let gpuMsg = ''
-  async function testGpu() {
-    gpuMsg = 'Checking…'
-    if (!navigator.gpu) { gpuMsg = 'WebGPU unavailable — navigator.gpu missing (will use CPU)'; return }
-    try {
-      const a = await navigator.gpu.requestAdapter()
-      if (!a) { gpuMsg = 'navigator.gpu present but no adapter (will use CPU)'; return }
-      const i = a.info || {}
-      gpuMsg = 'WebGPU OK — ' + (i.description || i.device || i.architecture || i.vendor || 'adapter found')
-    } catch (e) { gpuMsg = 'WebGPU error: ' + e.message }
-  }
 </script>
 
 <div class="scrim" on:click={onClose}></div>
@@ -300,32 +254,27 @@
 
       <section class="cp-pane" class:active={pane === 'dictation'}>
         <div class="cp-pane-title">Dictation</div>
-    <div class="field">
-      <span>Engine</span>
-      <Select value={dictationEngine} options={ENGINE_OPTS} onChange={(v) => { dictationEngine = v; apply() }} />
-    </div>
-    {#if dictationEngine === 'whisper'}
-      <div class="field">
-        <span>Whisper model</span>
-        <Select value={whisperModel} options={MODEL_OPTS} onChange={(v) => { whisperModel = v; apply() }} />
-      </div>
-    {/if}
-    <div class="field">
-      <span>Microphone</span>
-      <Select value={audioDeviceId} options={micOpts} onChange={(v) => { audioDeviceId = v; apply() }} />
-    </div>
+    <p class="note">
+      Dictation runs in <b>Latte Dictate</b>, a separate app. Speech recognition
+      cannot happen inside LatteWrite: the browser engine Electron ships does not
+      carry Google's speech API key, so it has to be a separate process driving
+      Chrome.
+    </p>
     <div class="row">
-      <button class="solid" on:click={testMic}>{micTesting ? 'STOP' : 'TEST MIC'}</button>
-      <div class="meter"><div class="meter-fill" style="width:{micLevel * 100}%"></div></div>
+      <span class="note" style="margin:0">
+        {dictateFound ? 'Latte Dictate is installed.' : 'Latte Dictate was not found.'}
+      </span>
     </div>
-    <p class="note">Speak — the bar should move. If it stays flat, pick a different microphone above.</p>
-    <p class="note">Device selection only applies to the Whisper engine — Web Speech always uses the system default input. Switching model downloads it on first use.</p>
-    {#if dictationEngine === 'whisper'}
-      <div class="row">
-        <button class="solid" on:click={testGpu}>TEST GPU</button>
-        {#if gpuMsg}<span class="note" style="margin:0">{gpuMsg}</span>{/if}
-      </div>
+    {#if !dictateFound}
+      <p class="note">
+        Put its AppImage next to LatteWrite's — in <code>~/LatteWrite</code> — and
+        reopen this window. The DICTATE button stays disabled until then.
+      </p>
     {/if}
+    <p class="note">
+      The microphone, the language model and spoken punctuation are configured in
+      Latte Dictate itself. It runs offline once its on-device model is installed.
+    </p>
   </section>
 
       <section class="cp-pane" class:active={pane === 'editor'}>
