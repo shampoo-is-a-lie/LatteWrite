@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Latte Dictate - Web Speech probe</title>
+<style>
+  :root {
+    --bg: #f6f4f1; --panel: #fff; --fg: #1c1a18; --dim: #6d6560;
+    --line: #ded7d0; --accent: #7a4b28; --ok: #2f6b3a; --bad: #9a2b2b; --warn: #8a6a1f;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #171513; --panel: #201d1a; --fg: #ece7e1; --dim: #9c938c;
+      --line: #35302b; --accent: #c98a55; --ok: #6fbf7f; --bad: #e07a7a; --warn: #d7b45c;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 20px; background: var(--bg); color: var(--fg);
+    font: 15px/1.5 system-ui, sans-serif;
+  }
+  h1 { font-size: 15px; letter-spacing: .14em; text-transform: uppercase; margin: 0 0 16px; color: var(--dim); }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; margin-bottom: 14px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px 18px; }
+  .cell .k { font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--dim); }
+  .cell .v { font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .ok { color: var(--ok); } .bad { color: var(--bad); } .warn { color: var(--warn); }
+  button {
+    font: 600 12px/1 system-ui, sans-serif; letter-spacing: .1em; text-transform: uppercase;
+    padding: 11px 16px; border: 0; border-radius: 7px; background: var(--accent); color: #fff;
+    cursor: pointer; margin: 0 6px 6px 0;
+  }
+  button:disabled { opacity: .35; cursor: default; }
+  button.ghost { background: transparent; color: var(--dim); border: 1px solid var(--line); }
+  label.opt { display: inline-flex; align-items: center; gap: 7px; margin-right: 16px; font-size: 13px; color: var(--dim); }
+  #focusBar { padding: 12px 16px; border-radius: 8px; font-weight: 700; letter-spacing: .1em;
+              text-transform: uppercase; font-size: 13px; text-align: center; }
+  .focused { background: color-mix(in srgb, var(--warn) 22%, transparent); color: var(--warn); }
+  .blurred { background: color-mix(in srgb, var(--ok) 22%, transparent); color: var(--ok); }
+  #out { min-height: 110px; font-size: 19px; line-height: 1.55; }
+  #interim { color: var(--dim); font-style: italic; }
+  #log { font: 11px/1.65 ui-monospace, monospace; color: var(--dim); max-height: 190px;
+         overflow-y: auto; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+
+<h1>Latte Dictate - Web Speech probe</h1>
+
+<div class="panel grid">
+  <div class="cell"><div class="k">API</div><div class="v" id="sApi">-</div></div>
+  <div class="cell"><div class="k">On-device model</div><div class="v" id="sAvail">-</div></div>
+  <div class="cell"><div class="k">Engine</div><div class="v" id="sState">IDLE</div></div>
+  <div class="cell"><div class="k">First result</div><div class="v" id="sLatency">-</div></div>
+  <div class="cell"><div class="k">Finals</div><div class="v" id="sFinals">0</div></div>
+  <div class="cell"><div class="k">Results while unfocused</div><div class="v" id="sBlur">0</div></div>
+</div>
+
+<div class="panel">
+  <button id="bInstall">Install on-device model</button>
+  <button id="bStart">Start listening</button>
+  <button id="bStop" disabled>Stop</button>
+  <button id="bClear" class="ghost">Clear</button>
+  <div style="margin-top:12px">
+    <label class="opt"><input type="radio" name="mode" value="local" checked> On-device (offline)</label>
+    <label class="opt"><input type="radio" name="mode" value="cloud"> Cloud (Google)</label>
+    <label class="opt"><input type="checkbox" id="cArm"> Arm typing into focused window</label>
+    <label class="opt"><input type="checkbox" id="cPunct" checked> Spoken punctuation</label>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="k" style="font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);margin-bottom:6px">Say these</div>
+  <div id="cmds" style="font:11px/1.7 ui-monospace,monospace;color:var(--dim);white-space:pre-wrap">loading...</div>
+</div>
+
+<div class="panel" style="padding:0;border:0"><div id="focusBar" class="focused">This window is focused</div></div>
+
+<div class="panel"><div id="out"><span id="finals"></span> <span id="interim"></span></div></div>
+
+<div class="panel"><div id="log"></div></div>
+
+<script>
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+const $ = id => document.getElementById(id);
+let rec = null, running = false, wantRunning = false;
+let finalCount = 0, blurCount = 0, startedAt = 0, gotFirst = false;
+
+function log(msg) {
+  const t = new Date().toTimeString().slice(0, 8);
+  $('log').textContent = `${t}  ${msg}\n` + $('log').textContent;
+}
+function setState(s, cls) { $('sState').textContent = s; $('sState').className = 'v ' + (cls || ''); }
+const mode = () => document.querySelector('input[name=mode]:checked').value;
+const processLocally = () => mode() === 'local';
+
+// Tell the server what happened. It punctuates, prints, and - when armed - types
+// the result into whatever window currently has focus, returning what it wrote.
+function report(kind, text, extra = {}) {
+  return fetch('/event', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      kind, text, inject: $('cArm').checked, punct: $('cPunct').checked,
+      focused: document.hasFocus(), ...extra
+    })
+  }).then(r => r.json()).catch(() => null);
+}
+
+// The server's punctuator is stateful - spacing and capitalisation depend on the
+// previous phrase - so finals must reach it in order. Serialise them.
+let chain = Promise.resolve();
+function sendFinal(text, extra) {
+  chain = chain.then(async () => {
+    const r = await report('final', text, extra);
+    if (r && r.out) $('finals').textContent += r.out;
+  }).catch(() => {});
+}
+
+// ── Focus tracking ───────────────────────────────────────────────────────────
+// The whole standalone design rests on recognition surviving loss of focus,
+// so make that state impossible to miss and count results received while blurred.
+function paintFocus() {
+  const f = document.hasFocus();
+  $('focusBar').className = f ? 'focused' : 'blurred';
+  $('focusBar').textContent = f
+    ? 'This window is focused - click another app to run the real test'
+    : 'Unfocused - recognition should still be running';
+}
+addEventListener('focus', paintFocus);
+addEventListener('blur', paintFocus);
+setInterval(paintFocus, 400);
+
+// ── Availability ─────────────────────────────────────────────────────────────
+async function refreshAvail() {
+  if (!SR || typeof SR.available !== 'function') { $('sAvail').textContent = 'N/A'; return null; }
+  try {
+    const a = await SR.available({ langs: ['en-US'], processLocally: true });
+    $('sAvail').textContent = String(a).toUpperCase();
+    $('sAvail').className = 'v ' + (a === 'available' ? 'ok' : a === 'unavailable' ? 'bad' : 'warn');
+    $('bInstall').disabled = (a === 'available' || a === 'unavailable');
+    return a;
+  } catch (e) { $('sAvail').textContent = 'ERR'; log('available() failed: ' + e.message); return null; }
+}
+
+$('bInstall').onclick = async () => {
+  $('bInstall').disabled = true;
+  log('install() requested - this may download a few hundred MB');
+  setState('INSTALLING', 'warn');
+  const poll = setInterval(refreshAvail, 1500);
+  try {
+    const ok = await SR.install({ langs: ['en-US'], processLocally: true });
+    log('install() resolved: ' + ok);
+  } catch (e) {
+    log('install() FAILED: ' + e.name + ' - ' + e.message);
+  } finally {
+    clearInterval(poll);
+    setState(running ? 'LISTENING' : 'IDLE', running ? 'ok' : '');
+    await refreshAvail();
+  }
+};
+
+// ── Recognition ──────────────────────────────────────────────────────────────
+function build() {
+  const r = new SR();
+  r.lang = 'en-US';
+  r.continuous = true;
+  r.interimResults = true;
+  try { r.processLocally = processLocally(); }
+  catch (e) { log('processLocally unsupported: ' + e.message); }
+
+  r.onstart = () => { running = true; setState('LISTENING', 'ok'); log('onstart (processLocally=' + processLocally() + ')'); };
+  r.onaudiostart = () => log('audio capture started');
+  r.onspeechstart = () => { startedAt = performance.now(); gotFirst = false; log('speech detected'); };
+
+  r.onresult = (e) => {
+    const blurred = !document.hasFocus();
+    if (!gotFirst && startedAt) {
+      gotFirst = true;
+      $('sLatency').textContent = Math.round(performance.now() - startedAt) + ' ms';
+    }
+    let interim = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const res = e.results[i];
+      if (res.isFinal) {
+        const text = res[0].transcript.trim();
+        if (!text) continue;
+        finalCount++; $('sFinals').textContent = finalCount;
+        log(`FINAL${blurred ? ' [unfocused]' : ''} (conf ${(res[0].confidence ?? 0).toFixed(2)}): ${text}`);
+        // The punctuated text comes back from the server and is appended there.
+        sendFinal(text, { confidence: res[0].confidence, mode: mode() });
+      } else interim += res[0].transcript;
+    }
+    $('interim').textContent = interim;
+    if (blurred) { blurCount++; $('sBlur').textContent = blurCount; }
+  };
+
+  r.onerror = (e) => {
+    log('ERROR: ' + e.error + (e.message ? ' - ' + e.message : ''));
+    if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+      wantRunning = false;
+      setState('MIC DENIED', 'bad');
+    }
+  };
+
+  // continuous still stops on its own; restart so a long session survives.
+  r.onend = () => {
+    running = false;
+    log('onend');
+    if (wantRunning) { setState('RESTARTING', 'warn'); setTimeout(() => { if (wantRunning) safeStart(); }, 250); }
+    else setState('IDLE', '');
+  };
+  return r;
+}
+
+function safeStart() {
+  try { rec = build(); rec.start(); }
+  catch (e) { log('start() threw: ' + e.message); setState('ERROR', 'bad'); }
+}
+
+$('bStart').onclick = () => {
+  wantRunning = true;
+  $('bStart').disabled = true; $('bStop').disabled = false;
+  startedAt = 0; gotFirst = false; $('sLatency').textContent = '-';
+  // Clear the server's spacing/capitalisation state so this session starts fresh.
+  chain = chain.then(() => report('session-start', ''));
+  safeStart();
+};
+$('bStop').onclick = () => {
+  wantRunning = false;
+  $('bStart').disabled = false; $('bStop').disabled = true;
+  try { rec && rec.stop(); } catch {}
+};
+$('bClear').onclick = () => {
+  $('finals').textContent = ''; $('interim').textContent = ''; $('log').textContent = '';
+  finalCount = blurCount = 0; $('sFinals').textContent = '0'; $('sBlur').textContent = '0';
+  $('sLatency').textContent = '-';
+};
+
+// ── Boot ─────────────────────────────────────────────────────────────────────
+(async () => {
+  $('sApi').textContent = SR ? 'PRESENT' : 'MISSING';
+  $('sApi').className = 'v ' + (SR ? 'ok' : 'bad');
+  if (!SR) { log('No SpeechRecognition on this browser - use Google Chrome.'); return; }
+  const inst = new SR();
+  if (!('processLocally' in inst)) log('WARNING: processLocally missing - on-device mode unsupported here.');
+  await refreshAvail();
+  fetch('/commands').then(r => r.text())
+    .then(t => { $('cmds').textContent = t; })
+    .catch(() => { $('cmds').textContent = 'could not load command list'; });
+  log('ready - install the model if needed, then START and speak.');
+})();
+</script>
+</body>
+</html>
