@@ -230,6 +230,11 @@ $('bStop').onclick = () => {
   wantRunning = false;
   $('bStart').disabled = false; $('bStop').disabled = true;
   try { rec && rec.stop(); } catch {}
+  // Release a half-command the server is still holding ("question" with no "mark").
+  chain = chain.then(async () => {
+    const r = await report('session-end', '');
+    if (r && r.out) $('finals').textContent += r.out;
+  }).catch(() => {});
 };
 $('bClear').onclick = () => {
   $('finals').textContent = ''; $('interim').textContent = ''; $('log').textContent = '';

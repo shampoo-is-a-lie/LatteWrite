@@ -140,6 +140,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
             print('\n  --- session start ---', flush=True)
             return self._json({'out': ''})
 
+        if kind == 'session-end':
+            # Release any half-command still held back, e.g. a trailing
+            # "question" that never got its "mark".
+            out = PUNCT.flush()
+            if out:
+                print(f'  --- session end, flushed {out!r} ---', flush=True)
+                self._inject(ev, out)
+            return self._json({'out': out})
+
         text = (ev.get('text') or '').strip()
         if kind != 'final' or not text:
             return self._json({'out': ''})
@@ -154,13 +163,17 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if out.strip() != text:
             print(f'    -> {out!r}', flush=True)
 
-        if ev.get('inject') and not self.opts.no_type:
-            if ev.get('focused'):
-                # Typing now would go straight back into the probe page.
-                print('  ! skipped typing: probe window has focus', flush=True)
-            else:
-                type_text(out, paste=self.opts.paste)
+        self._inject(ev, out)
         return self._json({'out': out})
+
+    def _inject(self, ev, out):
+        if not out or not ev.get('inject') or self.opts.no_type:
+            return
+        if ev.get('focused'):
+            # Typing now would go straight back into the probe page.
+            print('  ! skipped typing: probe window has focus', flush=True)
+            return
+        type_text(out, paste=self.opts.paste)
 
 
 class Server(http.server.ThreadingHTTPServer):

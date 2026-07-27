@@ -59,9 +59,40 @@ MAX_PHRASE = max(len(p.split()) for p in
                  (*ATTACH, *LEAD, *FREE, *BREAK, *CASE))
 
 
+def _build_commands():
+    """One lookup keyed by every spelling the recogniser might produce.
+
+    Chrome is inconsistent about compound commands: "question mark" comes back
+    as two words most of the time, but also as "question-mark" or
+    "questionmark". Keying only the spaced form made punctuation look random.
+    """
+    table = {}
+    for src, kind in ((ATTACH, 'attach'), (LEAD, 'lead'),
+                      (FREE, 'free'), (BREAK, 'break')):
+        for phrase, mark in src.items():
+            table[phrase] = (kind, mark)
+            table[phrase.replace(' ', '')] = (kind, mark)
+    for phrase, kind in CASE.items():
+        table[phrase] = (kind, None)
+        table[phrase.replace(' ', '')] = (kind, None)
+    table['quote'] = ('quote', None)
+    return table
+
+
+COMMANDS = _build_commands()
+
+# A command can also be cut in half by a phrase boundary: one final ends with
+# "question", the next begins with "mark", and neither matches. Holding the tail
+# back fixes that, but only for words that rarely end a real sentence - holding
+# "at", "new" or "open" would visibly delay very common words, so they are left
+# out and stay imperfect.
+SPLIT_SAFE = {'question', 'exclamation', 'semi', 'em', 'dot dot'}
+
+
 def _norm(word):
-    """Bare lowercase form, so a recogniser that emits 'Comma.' still matches."""
-    return re.sub(r'^\W+|\W+$', '', word.lower())
+    """Bare lowercase form, so 'Comma.' and 'question-mark' both match."""
+    w = re.sub(r'^\W+|\W+$', '', word.lower())
+    return re.sub(r'[-_]+', ' ', w).strip()
 
 
 class Punctuator:
@@ -83,6 +114,7 @@ class Punctuator:
         self.cap_next = self.auto_caps
         self.upper_next = False
         self.quote_open = False
+        self.held = []
 
     # ── emit helpers ─────────────────────────────────────────────────────────
 
@@ -131,11 +163,20 @@ class Punctuator:
 
     # ── main ─────────────────────────────────────────────────────────────────
 
-    def feed(self, text):
-        """Return the string to inject for one recognised phrase."""
-        words = (text or '').split()
+    def feed(self, text, hold=True):
+        """Return the string to inject for one recognised phrase.
+
+        hold=False forces everything out, which is what flush() needs - it must
+        not re-hold the words it is trying to release.
+        """
+        words = self.held + (text or '').split()
+        self.held = []
         if not words:
             return ''
+        if self.enabled and hold:
+            words = self._hold_tail(words)
+            if not words:
+                return ''
         out = []
         i = 0
         while i < len(words):
@@ -168,24 +209,36 @@ class Punctuator:
             i += 1
         return ''.join(out)
 
+    def _hold_tail(self, words):
+        """Withhold a trailing word that looks like half a command, so it can be
+        rejoined with the next phrase. Returns the words safe to emit now."""
+        for n in (2, 1):
+            if len(words) < n:
+                continue
+            tail = ' '.join(_norm(w) for w in words[-n:]).strip()
+            if tail in SPLIT_SAFE:
+                self.held = words[-n:]
+                return words[:-n]
+        return words
+
+    def flush(self):
+        """Emit anything still held. Call at the end of a listening session,
+        otherwise a trailing 'question' is never written."""
+        if not self.held:
+            return ''
+        words, self.held = self.held, []
+        return self.feed(' '.join(words), hold=False)
+
     def _match(self, words, i):
         """Longest phrase first, so 'exclamation mark' wins over 'mark'."""
         for n in range(min(MAX_PHRASE, len(words) - i), 0, -1):
-            phrase = ' '.join(_norm(w) for w in words[i:i + n]).strip()
+            phrase = ' '.join(_norm(w) for w in words[i:i + n])
+            phrase = re.sub(r'\s+', ' ', phrase).strip()
             if not phrase:
                 continue
-            if phrase in ATTACH:
-                return n, 'attach', ATTACH[phrase]
-            if phrase in LEAD:
-                return n, 'lead', LEAD[phrase]
-            if phrase in FREE:
-                return n, 'free', FREE[phrase]
-            if phrase in BREAK:
-                return n, 'break', BREAK[phrase]
-            if phrase in CASE:
-                return n, CASE[phrase], None
-            if phrase == 'quote':
-                return n, 'quote', None
+            hit = COMMANDS.get(phrase)
+            if hit:
+                return n, hit[0], hit[1]
         return None
 
 
@@ -238,6 +291,24 @@ def _selftest():
         (['Hello there.', 'this is next'], 'Hello there. This is next'),
         # trailing/duplicate whitespace must not leak through
         (['  spaced   out  '], 'Spaced out'),
+        # the recogniser hyphenates or squashes compound commands at random
+        (['do you like pizza question-mark'], 'Do you like pizza?'),
+        (['do you like pizza questionmark'], 'Do you like pizza?'),
+        (['she likes pizza exclamation-mark'], 'She likes pizza!'),
+        (['wait dot-dot-dot really'], 'Wait... really'),
+        # a command cut in half by a phrase boundary
+        (['do you like pizza question', 'mark'], 'Do you like pizza?'),
+        (['nice exclamation', 'point'], 'Nice!'),
+        # the reported sequence, mixed spellings, must be uniform now
+        (['do you like pizza question mark',
+          'do you like pizza question-mark',
+          'you like pizza exclamation point',
+          'she likes pizza exclamation-mark'],
+         'Do you like pizza? Do you like pizza? You like pizza! She likes pizza!'),
+        # common words must NOT be held back waiting for a command
+        (['look at'], 'Look at'),
+        (['something new'], 'Something new'),
+        (['that is all'], 'That is all'),
     ]
     fails = 0
     for phrases, expected in cases:
@@ -259,8 +330,26 @@ def _selftest():
     if p.feed('two') != 'Two':
         fails += 1
         print('FAIL  reset() did not clear state')
+    # a held word must not be lost when the session ends
+    p = Punctuator()
+    got = p.feed('i have a question') + p.flush()
+    if got != 'I have a question':
+        fails += 1
+        print(f'FAIL  flush() lost held words\n  got {got!r}')
+    # flush() on an empty buffer is a no-op
+    p = Punctuator()
+    if p.feed('done period') != 'Done.' or p.flush() != '':
+        fails += 1
+        print('FAIL  flush() on empty buffer')
+    # reset() must drop held words rather than leak them into the next session
+    p = Punctuator()
+    p.feed('trailing question')
+    p.reset()
+    if p.feed('new sentence') != 'New sentence':
+        fails += 1
+        print('FAIL  reset() leaked held words')
 
-    total = len(cases) + 2
+    total = len(cases) + 5
     print(f'{total - fails}/{total} passed')
     return 1 if fails else 0
 

@@ -47,6 +47,23 @@ Two design points worth knowing:
   product has this; the escape hatch is the SPOKEN PUNCTUATION toggle. A
   "literal" prefix would be the usual fix if it becomes annoying.
 
+### Why punctuation used to fire only sometimes
+
+Chrome is not consistent about how it transcribes a compound command. The same
+spoken "question mark" comes back as `question mark`, `question-mark` or
+`questionmark` at random, and matching only the spaced form made punctuation
+look unreliable. `COMMANDS` is now keyed by every spelling, and `_norm` treats
+hyphens and underscores as word separators.
+
+The other half of the problem is a command cut in two by a phrase boundary: one
+final ends `...pizza question`, the next starts `mark`, and neither matches.
+A trailing word listed in `SPLIT_SAFE` is held back and rejoined with the next
+phrase. Only words that rarely end a real sentence are eligible - holding "at",
+"new" or "open" would delay very common words, so those stay imperfect.
+
+A held word is released by `flush()`, which the page triggers on STOP. Without
+that, saying "I have a question" and stopping would swallow the last word.
+
 Not implemented yet: "scratch that" (needs tracked backspaces), and a
 substitution map so "latte dictate" comes out as "Latte Dictate".
 
