@@ -1,24 +1,35 @@
-// Drives the Latte Dictate sibling app over its --serve protocol.
+// Drives the Latte Dictate sibling app.
 //
 // Speech recognition cannot happen inside Electron: webkitSpeechRecognition is
 // backed by an API key compiled into official Google Chrome builds, and
 // Electron's Chromium ships without it. Latte Dictate is a separate process
-// that drives real Chrome, so it can. We spawn it and speak JSON Lines:
+// that drives real Chrome, so it can.
 //
-//   out (its stdout)  {"event":"ready"|"state"|"interim"|"final"|"bye"|"error"}
-//   in  (its stdin)   {"cmd":"start"|"stop"|"quit"}
+// We ATTACH to it rather than spawn our own. Latte Dictate's --serve mode talks
+// over the child's stdin/stdout, which means the only way to get a pipe is to
+// be the parent - so this used to start a second daemon on a second port, and
+// the user ended up with two daemons, two Chrome windows and two tray icons
+// whenever their global hotkey daemon was already running.
 //
-// stderr carries its logs, and closing stdin shuts it down - so it cannot
-// outlive us.
+//   GET  /ping                  is one already running?
+//   GET  /consume?type=off      SSE: the same events --serve writes to stdout
+//   POST /control {action}      start / stop
+//
+// `type=off` tells it we insert the text ourselves, so it suppresses its own
+// ydotool typing for as long as we stay attached - without that every phrase
+// would land twice. Detaching restores typing, which is what the hotkey wants.
+//
+// Events we receive: {"event":"ready"|"state"|"interim"|"final"|"bye"|"error"}
 import { spawn } from 'child_process'
 import { join, dirname } from 'path'
+import http from 'http'
 import fs from 'fs'
 import os from 'os'
 
-// Deliberately not 42815: that is the standalone daemon's port, and the user
-// may have it running behind their global hotkey. Sharing it would make one
-// refuse to start.
-const PORT = 42816
+// The standard port, shared with the standalone daemon on purpose. One daemon
+// serves the hotkey and this app; whoever needs it first starts it.
+const PORT = 42815
+const HOST = '127.0.0.1'
 
 const CANDIDATE_DIRS = [
   () => (process.env.APPIMAGE ? dirname(process.env.APPIMAGE) : null),
@@ -31,7 +42,8 @@ const CANDIDATE_DIRS = [
 const DEV_SCRIPT = join(os.homedir(), 'Documents', 'DEVELOPMENT', 'CLAUDE',
   'LatteDictate', 'latte_dictate.py')
 
-let child = null
+let stream = null        // the live /consume request
+let spawned = false      // did we start the daemon, or attach to someone else's?
 let onEvent = () => {}
 let buf = ''
 
@@ -56,37 +68,35 @@ export function available() {
   return !!findBinary()
 }
 
-function argvFor(bin) {
-  // --no-type is essential: without it Latte Dictate ALSO types the text into
-  // the focused window with ydotool, so every phrase would land twice - once
-  // from us and once from it.
-  //
-  // The tray is left ON deliberately. Being driven by LatteWrite is not a
-  // reason to hide it: it is the only affordance showing dictation is running
-  // and the only way to stop it if this window loses track of the child.
-  const args = ['--serve', '--no-type', '--port', String(PORT)]
-  return bin.endsWith('.py') ? ['python3', [bin, ...args]] : [bin, args]
+// ── talking to the daemon ───────────────────────────────────────────────────
+
+function ping(timeout = 700) {
+  return new Promise((resolve) => {
+    const req = http.get({ host: HOST, port: PORT, path: '/ping', timeout }, (res) => {
+      let body = ''
+      res.setEncoding('utf8')
+      res.on('data', (d) => { body += d })
+      res.on('end', () => { try { resolve(JSON.parse(body)) } catch { resolve(null) } })
+    })
+    req.on('error', () => resolve(null))
+    req.on('timeout', () => { req.destroy(); resolve(null) })
+  })
 }
 
-// "start" is deferred until a Chrome page has actually connected. Sending it
-// too early makes Latte Dictate conclude no page is open and launch a SECOND
-// window on top of the one still starting up.
-let pendingStart = false
-let startTimer = null
-let pollTimer = null
-
-function clearPending() {
-  pendingStart = false
-  clearTimeout(startTimer)
-  clearInterval(pollTimer)
-  startTimer = null
-  pollTimer = null
-}
-
-function reallyStart() {
-  if (!pendingStart) return
-  clearPending()
-  send({ cmd: 'start' })
+function control(action) {
+  return new Promise((resolve) => {
+    const body = JSON.stringify({ action })
+    const req = http.request({
+      host: HOST, port: PORT, path: '/control', method: 'POST', timeout: 3000,
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(body)
+      }
+    }, (res) => { res.resume(); res.on('end', () => resolve(res.statusCode === 200)) })
+    req.on('error', () => resolve(false))
+    req.on('timeout', () => { req.destroy(); resolve(false) })
+    req.end(body)
+  })
 }
 
 function handleLine(line) {
@@ -94,87 +104,97 @@ function handleLine(line) {
   if (!line) return
   let ev
   try { ev = JSON.parse(line) } catch { return }
-  // ready/state carry a snapshot; anything >= 1 means a page is live.
-  if (pendingStart && typeof ev.connected === 'number' && ev.connected >= 1) reallyStart()
   onEvent(ev)
 }
 
-/** Spawn if needed. Returns false when Latte Dictate is not installed. */
-export function ensure(send) {
-  onEvent = send
-  if (child) return true
+function attach() {
+  return new Promise((resolve) => {
+    const req = http.get({ host: HOST, port: PORT, path: '/consume?type=off' }, (res) => {
+      if (res.statusCode !== 200) { res.resume(); resolve(false); return }
+      stream = req
+      buf = ''
+      res.setEncoding('utf8')
+      res.on('data', (chunk) => {
+        // A chunk is not a line: SSE frames split across reads and several
+        // arrive together.
+        buf += chunk
+        const lines = buf.split('\n')
+        buf = lines.pop()
+        for (const l of lines) if (l.startsWith('data: ')) handleLine(l.slice(6))
+      })
+      const dropped = () => {
+        if (stream !== req) return
+        stream = null
+        onEvent({ event: 'exit', text: 'dictation stopped' })
+      }
+      res.on('end', dropped)
+      res.on('close', dropped)
+      resolve(true)
+    })
+    req.on('error', () => { stream = null; resolve(false) })
+  })
+}
 
+const sleep = (ms) => new Promise(r => setTimeout(r, ms))
+
+async function startDaemon() {
   const bin = findBinary()
   if (!bin) return false
 
-  const [cmd, args] = argvFor(bin)
+  // A plain daemon, not --serve and not --no-type: it should behave exactly as
+  // if the user had started it themselves, so their hotkey drives the same one.
+  // Our own typing suppression rides on the /consume connection instead.
+  const args = ['--port', String(PORT)]
+  const [cmd, argv] = bin.endsWith('.py')
+    ? ['python3', [bin, ...args]]
+    : [bin, args]
   try {
-    child = spawn(cmd, args, { stdio: ['pipe', 'pipe', 'pipe'] })
-  } catch {
-    child = null
-    return false
-  }
-
-  child.stdout.setEncoding('utf8')
-  child.stdout.on('data', (chunk) => {
-    // A chunk is not a line: JSON objects can be split across reads and
-    // several can arrive together.
-    buf += chunk
-    const lines = buf.split('\n')
-    buf = lines.pop()
-    lines.forEach(handleLine)
-  })
-
-  // Its logs, not ours - surface them for debugging without mixing streams.
-  child.stderr.setEncoding('utf8')
-  child.stderr.on('data', (d) => console.log('[latte-dictate]', d.trimEnd()))
-
-  const gone = (why) => {
-    child = null
-    buf = ''
-    onEvent({ event: 'exit', text: why })
-  }
-  child.on('error', (e) => gone(e.message))
-  child.on('exit', (code) => gone(code ? `exited (${code})` : 'stopped'))
-  return true
-}
-
-function send(msg) {
-  if (!child || !child.stdin.writable) return false
-  try {
-    child.stdin.write(JSON.stringify(msg) + '\n')
-    return true
+    // Detached: it outlives us on purpose now that it is also the hotkey's
+    // daemon. shutdown() stops it again if we were the ones who started it.
+    const child = spawn(cmd, argv, { detached: true, stdio: 'ignore' })
+    child.unref()
   } catch {
     return false
   }
-}
 
-export function setListening(on, emit) {
-  if (!on) {
-    clearPending()
-    return send({ cmd: 'stop' })
+  for (let i = 0; i < 40; i++) {           // up to ~8s for it to bind
+    await sleep(200)
+    if (await ping()) { spawned = true; return true }
   }
-  if (!ensure(emit)) return false
-  clearPending()
-  pendingStart = true
-  // Poll rather than wait for one event: the page POSTs "ready" BEFORE it
-  // subscribes to the event stream, so the connected count is still 0 at that
-  // moment and a single ready/state would start us too early - which is what
-  // opened a second window.
-  send({ cmd: 'status' })
-  pollTimer = setInterval(() => send({ cmd: 'status' }), 400)
-  // Cold start with no page ever arriving - go anyway rather than hang.
-  startTimer = setTimeout(reallyStart, 20000)
-  return true
+  return false
 }
 
-/** Called on app quit. Closing stdin is enough, but ask politely first. */
+/** Attach, starting a daemon first if nothing is running. */
+export async function ensure(send) {
+  onEvent = send
+  if (stream) return true
+  if (!(await ping()) && !(await startDaemon())) return false
+  return attach()
+}
+
+// ── the API index.js uses ───────────────────────────────────────────────────
+
+export async function setListening(on, emit) {
+  if (!on) return control('stop')
+  if (!(await ensure(emit))) return false
+  // No need to wait for a page: the daemon opens one if none is connected, and
+  // a page that connects later is told to start as it subscribes. The old
+  // poll-until-connected dance existed because we spawned our own daemon and
+  // raced its startup window; attaching removes the race.
+  return control('start')
+}
+
+/** Called on app quit. */
 export function shutdown() {
-  clearPending()
-  if (!child) return
-  send({ cmd: 'quit' })
-  try { child.stdin.end() } catch {}
-  const c = child
-  child = null
-  setTimeout(() => { try { c.kill() } catch {} }, 1500)
+  if (stream) {
+    try { stream.destroy() } catch {}
+    stream = null
+  }
+  // Only stop the daemon if it was ours. If the user already had one running
+  // behind their hotkey, killing it here would be rude - and it is the same
+  // daemon, so they would lose the hotkey too.
+  if (spawned) {
+    spawned = false
+    control('quit').catch(() => {})
+  }
 }
