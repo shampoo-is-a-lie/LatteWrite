@@ -530,6 +530,10 @@ ipcMain.handle('window:maximize', () => { mainWindow.isMaximized() ? mainWindow.
 ipcMain.handle('window:close', () => mainWindow.close())
 ipcMain.handle('window:isMaximized', () => mainWindow.isMaximized())
 
+// The AppImage filename carries no version on purpose, so desktop entries and
+// shortcuts survive rebuilds. This is how you tell which build you are running.
+ipcMain.handle('app:version', () => app.getVersion())
+
 // ── Dictation ─────────────────────────────────────────────────────────────────
 // Latte Dictate runs as a child process; events are pushed straight to the
 // renderer, which turns them into grey interim text and committed text.

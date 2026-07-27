@@ -76,6 +76,9 @@ contextBridge.exposeInMainWorld('api', {
       return () => ipcRenderer.off('context-menu', listener)
     }
   },
+  app: {
+    version: () => ipcRenderer.invoke('app:version')
+  },
   dictate: {
     available: () => ipcRenderer.invoke('dictate:available'),
     setListening: (on) => ipcRenderer.invoke('dictate:setListening', on),

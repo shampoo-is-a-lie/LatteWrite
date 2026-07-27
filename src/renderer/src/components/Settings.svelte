@@ -111,6 +111,10 @@
   }
 
 
+  // The AppImage has no version in its filename, so this is where you read it.
+  let appVersion = ''
+  window.api.app.version().then((v) => { appVersion = v })
+
   // Whether the sibling Latte Dictate app is on disk; drives the note below.
   let dictateFound = false
   window.api.dictate.available().then((v) => { dictateFound = v })
@@ -167,6 +171,7 @@
 <div class="panel">
   <div class="cp-header">
     <h2 class="cp-title">Settings</h2>
+    {#if appVersion}<span class="cp-version">v{appVersion}</span>{/if}
     <button class="cp-close" title="Close" on:click={() => { apply(); onClose() }}>
       <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
     </button>
@@ -388,6 +393,7 @@
   }
   .cp-header { display: flex; align-items: center; gap: 14px; padding: 1rem 1.2rem; border-bottom: 1px solid var(--rule); flex-shrink: 0; }
   .cp-title { margin: 0; flex: 1; color: var(--accent); text-transform: uppercase; letter-spacing: 0.15em; font-size: 0.85rem; font-family: var(--font-ui); }
+  .cp-version { flex-shrink: 0; color: var(--muted); font-family: var(--font-ui); font-size: 0.7rem; letter-spacing: 0.1em; font-variant-numeric: tabular-nums; }
   .cp-close { width: 32px; height: 32px; flex-shrink: 0; padding: 0; display: flex; align-items: center; justify-content: center; background: transparent; border: 1px solid var(--rule); color: var(--muted); border-radius: 8px; cursor: pointer; }
   .cp-close:hover { color: var(--accent); border-color: var(--accent); }
   .cp-body { flex: 1; display: flex; min-height: 0; }
