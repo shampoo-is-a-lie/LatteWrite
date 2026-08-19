@@ -14,7 +14,7 @@ import FontFamily from '@tiptap/extension-font-family'
 import { Presentation } from '../src/renderer/src/presentation-extension.js'
 import {
   CustomTable, ResizableImage, TableRow, TableHeader, TableCell, TextFx, Find, handleImagePaste,
-  setFindQuery, stepFind, closeFind, scrollToFindMatch, findState
+  setFindQuery, stepFind, closeFind, scrollToFindMatch, findState, fileToImageSrc
 } from '../src/renderer/src/editor-extensions.js'
 import { fontStack } from '../src/renderer/src/fonts.js'
 // Themes are pure data (colours + Google font names) + a CSS-var applier — both
@@ -174,6 +174,69 @@ function markActiveTheme() {
   }
 }
 
+
+// ── images/ ──────────────────────────────────────────────────────────────────
+// A .latte keeps each distinct picture as its own uncompressed entry named after
+// the SHA-1 of its bytes, and the document points at it. This mirrors
+// externalize()/inline() in src/main/bundle.js exactly — the two have to agree
+// byte-for-byte or a file saved here won't open there.
+const IMG_DIR = 'images/'
+const DATA_URL = /^data:image\/([\w.+-]+);base64,/
+const EXT_FOR = { jpeg: 'jpg', 'svg+xml': 'svg' }
+const SUBTYPE_FOR = { jpg: 'jpeg', svg: 'svg+xml' }
+
+function walkNodes(node, fn) {
+  if (!node || typeof node !== 'object') return
+  if (Array.isArray(node)) { for (const n of node) walkNodes(n, fn); return }
+  if (node.attrs && typeof node.attrs.src === 'string') fn(node.attrs)
+  if (node.content) walkNodes(node.content, fn)
+}
+
+const treesOf = (doc, vers) => [doc, ...(vers || []).map((v) => v && v.doc)]
+
+function base64OfBytes(bytes) {
+  let out = ''
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    out += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000))
+  }
+  return btoa(out)
+}
+
+async function sha1Hex(bytes) {
+  const digest = await crypto.subtle.digest('SHA-1', bytes)
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('')
+}
+
+async function inlineImages(zip, trees) {
+  const refs = new Set()
+  for (const t of trees) walkNodes(t, (a) => { if (a.src.startsWith(IMG_DIR)) refs.add(a.src) })
+  const urls = new Map()
+  for (const ref of refs) {
+    const entry = zip.file(ref)
+    if (!entry) continue                       // missing picture keeps its ref rather than blanking
+    const sub = ref.split('.').pop().toLowerCase()
+    urls.set(ref, `data:image/${SUBTYPE_FOR[sub] || sub};base64,${base64OfBytes(await entry.async('uint8array'))}`)
+  }
+  for (const t of trees) walkNodes(t, (a) => { const u = urls.get(a.src); if (u) a.src = u })
+}
+
+async function externalizeImages(zip, trees) {
+  const pending = []
+  for (const t of trees) walkNodes(t, (a) => { if (DATA_URL.test(a.src)) pending.push(a) })
+  const names = new Map()
+  for (const attrs of pending) {
+    let name = names.get(attrs.src)
+    if (!name) {
+      const sub = DATA_URL.exec(attrs.src)[1].toLowerCase()
+      const bytes = new Uint8Array(await (await fetch(attrs.src)).arrayBuffer())
+      name = `${IMG_DIR}${await sha1Hex(bytes)}.${EXT_FOR[sub] || sub}`
+      zip.file(name, bytes, { compression: 'STORE' })   // PNG/JPEG won't deflate
+      names.set(attrs.src, name)
+    }
+    attrs.src = name
+  }
+}
+
 // ── Open / Save / New ─────────────────────────────────────────────────────────
 async function openLatte(file) {
   try {
@@ -185,6 +248,7 @@ async function openLatte(file) {
     const verEntry = zip.file('versions.json')
     meta = metaEntry ? JSON.parse(await metaEntry.async('string')) : {}
     versions = verEntry ? JSON.parse(await verEntry.async('string')) : []
+    await inlineImages(zip, treesOf(doc, versions))
     currentName = file.name
     buildEditor(doc)
     themeForDoc(meta)
@@ -211,9 +275,14 @@ async function saveLatte() {
     meta.fontScale = zoomFactor
   }
   const zip = new JSZip()
-  zip.file('doc.json', JSON.stringify(editor.getJSON()))
+  // Copies, because externalising rewrites every image src to an entry name and
+  // the history we are still holding has to stay inlined for the open editor.
+  const doc = editor.getJSON()
+  const vers = JSON.parse(JSON.stringify(versions))
+  await externalizeImages(zip, treesOf(doc, vers))
+  zip.file('doc.json', JSON.stringify(doc))
   zip.file('meta.json', JSON.stringify(meta, null, 2))
-  zip.file('versions.json', JSON.stringify(versions))
+  zip.file('versions.json', JSON.stringify(vers))
   const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' })
   const name = currentName && /\.latte$/i.test(currentName) ? currentName : (currentName || 'document') + '.latte'
   const url = URL.createObjectURL(blob)
@@ -297,11 +366,7 @@ el('btn-new').addEventListener('click', newDoc)
 el('btn-image').addEventListener('click', () => el('image-input').click())
 el('image-input').addEventListener('change', (e) => {
   const f = e.target.files[0]
-  if (f && editor) {
-    const r = new FileReader()
-    r.onload = () => editor.chain().focus().setImage({ src: r.result }).run()
-    r.readAsDataURL(f)
-  }
+  if (f && editor) fileToImageSrc(f).then((src) => editor.chain().focus().setImage({ src }).run())
   e.target.value = ''
 })
 

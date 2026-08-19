@@ -21,7 +21,17 @@
 
   let settings = {}
   let editor = null
+  // `bump` ticks on every change, for cheap things that must feel instant (the
+  // toolbar's active states). `docBump` is its coalesced twin, for anything that
+  // has to walk the document — dictation produces several changes a second and
+  // nothing that expensive should run at that rate.
   let bump = 0
+  let docBump = 0
+  let docBumpTimer = null
+  function markDocChanged() {
+    clearTimeout(docBumpTimer)
+    docBumpTimer = setTimeout(() => docBump++, 250)
+  }
 
   // Saved favourite colours for the text/highlight pickers (most-recent first).
   let favText = DEFAULT_TEXT_COLORS
@@ -64,7 +74,12 @@
   let dialog = null  // themed alert/confirm
 
   // Version history — one snapshot per day (the day's final content), newest 20.
+  // Each snapshot embeds the images the document had that day, so this is very
+  // often far larger than the document itself. It changes at most once a day, so
+  // it is sent to the main process only when it really did change; otherwise the
+  // save keeps whatever is already in the file. See buildBundle in main/bundle.js.
   let versions = []
+  let versionsDirty = false
   let lastSaveDate = null
   let lastSaveDoc = null
   let showVersions = false
@@ -74,9 +89,11 @@
   let findBar
   let showNav = false
 
-  // Document outline (H1/H2). Recomputed on every doc/selection change via `bump`,
-  // but only while the navigator is open so idle keystrokes stay cheap.
-  $: outline = showNav ? buildOutline(editor, bump) : []
+  // Document outline (H1/H2). Only built while the navigator is open, and then
+  // off `docBump` rather than `bump`: it walks the entire document, which is far
+  // too much to redo for every interim dictation result. The "you are here"
+  // marker still tracks the caret live — it only scans the headings list.
+  $: outline = showNav ? buildOutline(editor, docBump) : []
   $: activeHeadingPos = showNav ? activeHeading(outline, editor, bump) : -1
 
   function buildOutline(ed, _bump) {
@@ -131,6 +148,7 @@
     versions = [{ date, savedAt: Date.now(), doc }, ...versions.filter(v => v.date !== date)]
       .sort((a, b) => (a.date < b.date ? 1 : -1))
       .slice(0, 20)
+    versionsDirty = true
   }
 
   function onDrawChange() { dirty = true; scheduleAutosave() }
@@ -188,7 +206,7 @@
     showConfirm({
       title: 'Delete version', danger: true, confirmLabel: 'DELETE',
       message: `Delete the saved version from ${v.date}?`,
-      onConfirm: () => { versions = versions.filter(x => x.date !== v.date); saveNow(false) }
+      onConfirm: () => { versions = versions.filter(x => x.date !== v.date); versionsDirty = true; saveNow(false) }
     })
   }
 
@@ -233,10 +251,22 @@
     return { title, titleManual, style, fontScale, drawings, bodyFont: fontStack(obj.fonts.body), headingFont: fontStack(obj.fonts.heading), bodyFamily: obj.fonts.body, headingFamily: obj.fonts.heading, codeFamily: obj.fonts.code, updatedAt: Date.now() }
   }
 
+  // The document's first non-empty line. Stops at the block that has one rather
+  // than flattening the whole document to text: this runs on every keystroke —
+  // and on every interim dictation result, several times a second.
+  function firstLine(ed) {
+    const doc = ed.state.doc
+    for (let i = 0; i < doc.childCount; i++) {
+      const t = doc.child(i).textContent.trim()
+      if (t) return t
+    }
+    return ''
+  }
+
   // Auto-derive the name from the first line — unless the user has set it explicitly.
   function computeTitle() {
     if (!editor || titleManual) return
-    const line = editor.getText().split('\n').find(l => l.trim())
+    const line = firstLine(editor)
     const fromFile = filePath ? filePath.split('/').pop().replace(/\.latte$/, '') : ''
     title = (line || fromFile || 'Untitled').trim().slice(0, 80)
   }
@@ -256,7 +286,7 @@
 
   function onReady(ed) { editor = ed; computeTitle(); updatePresentation() }
   function onChange() {
-    bump++; dirty = true; computeTitle(); updatePresentation()
+    bump++; markDocChanged(); dirty = true; computeTitle(); updatePresentation()
     if (!filePath) createDraft()
     else scheduleAutosave()
   }
@@ -269,7 +299,7 @@
     creatingDraft = true
     const doc = editor.getJSON()
     const res = await window.api.doc.autoNew({ doc, meta: { ...buildMeta(), savedDate: ymd() } })
-    if (res) { filePath = res.filePath; dirty = false; versions = []; lastSaveDate = ymd(); lastSaveDoc = doc }
+    if (res) { filePath = res.filePath; dirty = false; versions = []; versionsDirty = false; lastSaveDate = ymd(); lastSaveDoc = doc }
     creatingDraft = false
     scheduleAutosave()
   }
@@ -341,8 +371,12 @@
     const curDoc = editor.getJSON()
     // First save of a new day → freeze the previous day's final content.
     if (lastSaveDate && lastSaveDate !== today && lastSaveDoc) upsertVersion(lastSaveDate, lastSaveDoc)
-    const res = await window.api.doc.save({ filePath, doc: curDoc, meta: { ...buildMeta(), savedDate: today }, versions })
-    if (res) { filePath = res.filePath; dirty = false; computeTitle() }
+    // Omitting `versions` means "keep the history already on disk". A file that
+    // doesn't exist yet has none to keep, so send it there whatever the flag says.
+    const req = { filePath, doc: curDoc, meta: { ...buildMeta(), savedDate: today } }
+    if (versionsDirty || !filePath) req.versions = versions
+    const res = await window.api.doc.save(req)
+    if (res) { filePath = res.filePath; dirty = false; versionsDirty = false; computeTitle() }
     lastSaveDate = today
     lastSaveDoc = curDoc
     saving = false
@@ -407,7 +441,7 @@
     editor.commands.setContent(content || '', false)
     const view = editor.view
     view.updateState(EditorState.create({ doc: view.state.doc, plugins: view.state.plugins }))
-    bump++; updatePresentation()
+    bump++; markDocChanged(); updatePresentation()
   }
 
   function loadDoc(res) {
@@ -420,6 +454,9 @@
     fontScale = meta.fontScale || 1
     drawings = meta.drawings || []
     versions = res.versions || []
+    // A bundle that still stores its pictures inline gets rewritten on the next
+    // save; sending the history along is what lets the snapshots share them.
+    versionsDirty = !!res.legacy
     lastSaveDate = meta.savedDate || null
     lastSaveDoc = res.doc
     applyCurrent()
@@ -440,6 +477,7 @@
     titleManual = false
     drawings = []
     versions = []
+    versionsDirty = false
     lastSaveDate = null
     lastSaveDoc = null
     computeTitle()

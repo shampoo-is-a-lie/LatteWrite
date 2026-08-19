@@ -3,6 +3,7 @@
   import ColorMenu from './ColorMenu.svelte'
   import FxMenu from './FxMenu.svelte'
   import { adaptiveColor } from '../colors.js'
+  import { fileToImageSrc } from '../editor-extensions.js'
   export let editor = null
   export let bump = 0
   export let title = 'Untitled'
@@ -78,7 +79,9 @@
   function pickImage() { fileInput && fileInput.click() }
   function onImageFile(e) {
     const f = e.target.files && e.target.files[0]
-    if (f && editor) { const r = new FileReader(); r.onload = () => editor.chain().focus().setImage({ src: r.result }).run(); r.readAsDataURL(f) }
+    // Same downscale-and-re-encode as a paste — inserting from disk is where the
+    // biggest originals come in.
+    if (f && editor) fileToImageSrc(f).then(src => editor.chain().focus().setImage({ src }).run())
     e.target.value = ''
   }
 
