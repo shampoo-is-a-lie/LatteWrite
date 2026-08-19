@@ -307,6 +307,56 @@ export function scrollToFindMatch(editor) {
   scroller.scrollTo({ top: scroller.scrollTop + (top - box.top) - box.height / 2, behavior: 'smooth' })
 }
 
+// ── Bringing a picture in ────────────────────────────────────────────────────
+// Screenshots and photos arrive at full display or sensor resolution and are
+// embedded in the document, so one 4000x3000 photo is ~9.5 MB of base64 that has
+// to be encoded, hashed and written on every save — to be shown about 700 px
+// wide. Cap the long edge and re-encode.
+//
+// JPEG when the picture is opaque, PNG when there is transparency to keep.
+// Deliberately not WebP: Electron's nativeImage can't read a WebP data URL, so
+// "copy image" would quietly stop handing native apps a real bitmap.
+export const IMAGE_MAX_PX = 2560
+export const IMAGE_QUALITY = 0.85
+
+const readDataUrl = (file) => new Promise((resolve, reject) => {
+  const r = new FileReader()
+  r.onload = () => resolve(r.result)
+  r.onerror = () => reject(r.error)
+  r.readAsDataURL(file)
+})
+
+function hasAlpha(ctx, w, h) {
+  const { data } = ctx.getImageData(0, 0, w, h)
+  for (let i = 3; i < data.length; i += 4) if (data[i] < 255) return true
+  return false
+}
+
+export async function fileToImageSrc(file, maxPx = IMAGE_MAX_PX) {
+  const original = await readDataUrl(file)
+  // Vector stays vector, and an animation would lose every frame but the first.
+  if (file.type === 'image/svg+xml' || file.type === 'image/gif') return original
+
+  let bmp
+  try { bmp = await createImageBitmap(file) } catch { return original }
+
+  const scale = Math.min(1, maxPx / Math.max(bmp.width, bmp.height))
+  const w = Math.max(1, Math.round(bmp.width * scale))
+  const h = Math.max(1, Math.round(bmp.height * scale))
+
+  const canvas = document.createElement('canvas')
+  canvas.width = w
+  canvas.height = h
+  const ctx = canvas.getContext('2d', { willReadFrequently: true })
+  ctx.drawImage(bmp, 0, 0, w, h)
+  bmp.close()
+
+  const out = canvas.toDataURL(hasAlpha(ctx, w, h) ? 'image/png' : 'image/jpeg', IMAGE_QUALITY)
+  // Never trade a small original for a larger re-encode — icons, line art and
+  // already-optimised JPEGs are usually best left exactly as they came.
+  return out.length < original.length ? out : original
+}
+
 // Paste an image from the clipboard (e.g. a screenshot) as an embedded data URL.
 export function handleImagePaste(view, event) {
   const items = event.clipboardData && event.clipboardData.items
@@ -319,12 +369,10 @@ export function handleImagePaste(view, event) {
     if (it.type.startsWith('image/')) {
       const file = it.getAsFile()
       if (!file) continue
-      const reader = new FileReader()
-      reader.onload = () => {
-        const node = view.state.schema.nodes.image.create({ src: reader.result })
+      fileToImageSrc(file).then((src) => {
+        const node = view.state.schema.nodes.image.create({ src })
         view.dispatch(view.state.tr.replaceSelectionWith(node))
-      }
-      reader.readAsDataURL(file)
+      }).catch(() => { /* nothing usable on the clipboard */ })
       return true
     }
   }

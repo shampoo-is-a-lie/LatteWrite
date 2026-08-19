@@ -24,6 +24,7 @@ const store = new Store({
     recentFiles: [],
     autosaveMs: 1200,
     backupsToKeep: 10,
+    backupIntervalMs: 300000,  // at most one rotated backup per 5 min per document
     spellcheck: true,
 
     // Window

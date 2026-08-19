@@ -30,8 +30,9 @@ function parseTrashInfo(file) {
 }
 
 // Plain text of a .latte, for the preview line. Also proves the file still reads.
+// Images are left as entry references — this only ever needs the words.
 function digest(file) {
-  const { doc, meta } = readBundle(file)
+  const { doc, meta } = readBundle(file, { images: false, history: false })
   let text = ''
   const walk = (n) => {
     if (!n) return

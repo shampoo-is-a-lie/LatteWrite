@@ -126,9 +126,12 @@ ipcMain.handle('doc:openPath', (_e, filePath) => openPath(filePath))
 
 function openPath(filePath) {
   if (!fs.existsSync(filePath)) return null
-  const { doc, meta, versions } = readBundle(filePath)
+  // `legacy` means the bundle still keeps its pictures inline as base64. The
+  // renderer answers by marking the history dirty, so the next save rewrites the
+  // whole file in the current layout — a one-time migration, no separate pass.
+  const { doc, meta, versions, legacy } = readBundle(filePath)
   addRecent(filePath)
-  return { filePath, doc, meta, versions }
+  return { filePath, doc, meta, versions, legacy }
 }
 
 ipcMain.handle('doc:save', async (_e, { filePath, doc, meta, versions }) => {
@@ -141,7 +144,7 @@ ipcMain.handle('doc:save', async (_e, { filePath, doc, meta, versions }) => {
     if (res.canceled || !res.filePath) return null
     target = res.filePath
   }
-  saveDocument(target, { doc, meta, versions }, store.get('backupsToKeep'))
+  saveDocument(target, { doc, meta, versions }, store.get('backupsToKeep'), store.get('backupIntervalMs'))
   addRecent(target)
 
   if (store.get('syncOnSave')) { try { await syncCurrent(target) } catch { /* surfaced via sync:now */ } }
@@ -154,7 +157,7 @@ ipcMain.handle('doc:saveAs', async (_e, { doc, meta, versions }) => {
     filters: FILTERS
   })
   if (res.canceled || !res.filePath) return null
-  saveDocument(res.filePath, { doc, meta, versions }, store.get('backupsToKeep'))
+  saveDocument(res.filePath, { doc, meta, versions }, store.get('backupsToKeep'), store.get('backupIntervalMs'))
   addRecent(res.filePath)
   return { filePath: res.filePath }
 })
@@ -166,7 +169,7 @@ ipcMain.handle('doc:openInNewWindow', (_e, { doc, meta }) => {
   const base = sanitizeName(meta?.title) || 'Untitled'
   let target = join(docsDir(), `${base}.latte`)
   for (let i = 2; fs.existsSync(target); i++) target = join(docsDir(), `${base} (${i}).latte`)
-  saveDocument(target, { doc, meta, versions: [] }, store.get('backupsToKeep'))
+  saveDocument(target, { doc, meta, versions: [] }, store.get('backupsToKeep'), store.get('backupIntervalMs'))
   addRecent(target)
   const exe = process.env.APPIMAGE
   if (exe) spawn(exe, [target], { detached: true, stdio: 'ignore' }).unref()
@@ -303,7 +306,7 @@ ipcMain.handle('doc:autoNew', (_e, { doc, meta }) => {
   let name = base, i = 1
   while (fs.existsSync(join(dir, name + '.latte'))) { name = `${base}_${String(i).padStart(2, '0')}`; i++ }
   const target = join(dir, name + '.latte')
-  saveDocument(target, { doc, meta }, store.get('backupsToKeep'))
+  saveDocument(target, { doc, meta }, store.get('backupsToKeep'), store.get('backupIntervalMs'))
   addRecent(target)
   return { filePath: target }
 })
