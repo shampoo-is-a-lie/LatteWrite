@@ -116,6 +116,7 @@
   window.api.app.version().then((v) => { appVersion = v })
 
   // Whether the sibling Latte Dictate app is on disk; drives the note below.
+  const isMac = window.api?.platform === 'darwin'
   let dictateFound = false
   window.api.dictate.available().then((v) => { dictateFound = v })
 
@@ -259,27 +260,45 @@
 
       <section class="cp-pane" class:active={pane === 'dictation'}>
         <div class="cp-pane-title">Dictation</div>
-    <p class="note">
-      Dictation runs in <b>Latte Dictate</b>, a separate app. Speech recognition
-      cannot happen inside LatteWrite: the browser engine Electron ships does not
-      carry Google's speech API key, so it has to be a separate process driving
-      Chrome.
-    </p>
-    <div class="row">
-      <span class="note" style="margin:0">
-        {dictateFound ? 'Latte Dictate is installed.' : 'Latte Dictate was not found.'}
-      </span>
-    </div>
-    {#if !dictateFound}
+    {#if isMac}
       <p class="note">
-        Put its AppImage next to LatteWrite's — in <code>~/LatteWrite</code> — and
-        reopen this window. The DICTATE button stays disabled until then.
+        Use <b>macOS dictation</b>: press <b>Fn</b> twice and talk. It types into the
+        editor exactly as it does into any other text field, and you can also reach
+        it from <b>Edit ▸ Start Dictation</b>.
+      </p>
+      <p class="note">
+        Turn it on, and choose whether to keep it on-device, in
+        <b>System Settings ▸ Keyboard ▸ Dictation</b>. With the language downloaded
+        it works offline.
+      </p>
+      <p class="note">
+        The Linux build ships its own dictation, because the browser engine Electron
+        carries has no speech API key and needs a separate process driving Chrome.
+        macOS provides the whole thing system-wide, so this build doesn't.
+      </p>
+    {:else}
+      <p class="note">
+        Dictation runs in <b>Latte Dictate</b>, a separate app. Speech recognition
+        cannot happen inside LatteWrite: the browser engine Electron ships does not
+        carry Google's speech API key, so it has to be a separate process driving
+        Chrome.
+      </p>
+      <div class="row">
+        <span class="note" style="margin:0">
+          {dictateFound ? 'Latte Dictate is installed.' : 'Latte Dictate was not found.'}
+        </span>
+      </div>
+      {#if !dictateFound}
+        <p class="note">
+          Put its AppImage next to LatteWrite's — in <code>~/LatteWrite</code> — and
+          reopen this window. The DICTATE button stays disabled until then.
+        </p>
+      {/if}
+      <p class="note">
+        The microphone, the language model and spoken punctuation are configured in
+        Latte Dictate itself. It runs offline once its on-device model is installed.
       </p>
     {/if}
-    <p class="note">
-      The microphone, the language model and spoken punctuation are configured in
-      Latte Dictate itself. It runs offline once its on-device model is installed.
-    </p>
   </section>
 
       <section class="cp-pane" class:active={pane === 'editor'}>
@@ -356,10 +375,17 @@
         {#if backupMsg}<p class="note">{backupMsg}</p>{/if}
 
         <div class="subhead">Desktop integration</div>
-        <p class="note">Add LatteWrite to your desktop's application menu (KDE, GNOME, …) with its icon, and set it as the handler for .latte files. AppImages don't do this on their own.</p>
-        <div class="row">
-          <button class="solid" on:click={installDesktop}>ADD TO APPLICATIONS MENU</button>
-        </div>
+        {#if isMac}
+          <p class="note">macOS reads the .latte file type and the icon from the app bundle itself, so there is normally nothing to do. Re-register if a rebuild left Finder showing the wrong icon, or opening a .latte picks the wrong app.</p>
+          <div class="row">
+            <button class="solid" on:click={installDesktop}>RE-REGISTER FILE TYPE</button>
+          </div>
+        {:else}
+          <p class="note">Add LatteWrite to your desktop's application menu (KDE, GNOME, …) with its icon, and set it as the handler for .latte files. AppImages don't do this on their own.</p>
+          <div class="row">
+            <button class="solid" on:click={installDesktop}>ADD TO APPLICATIONS MENU</button>
+          </div>
+        {/if}
         {#if desktopMsg}<p class="note">{desktopMsg}</p>{/if}
       </section>
     </div>

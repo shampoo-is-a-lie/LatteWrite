@@ -3,6 +3,11 @@
   import ColorMenu from './ColorMenu.svelte'
   import FxMenu from './FxMenu.svelte'
   import { adaptiveColor } from '../colors.js'
+
+  // macOS draws its own close/minimise/zoom buttons over the top-left of the
+  // window, so ours would be a second, wrong set — and the first row has to get
+  // out of their way. See trafficLightPosition in main/index.js.
+  const isMac = window.api?.platform === 'darwin'
   import { fileToImageSrc } from '../editor-extensions.js'
   export let editor = null
   export let bump = 0
@@ -99,7 +104,7 @@
 </script>
 
 <div class="topbar">
-  <div class="row main">
+  <div class="row main" class:mac={isMac}>
     <div class="filewrap">
       <button on:click={() => showFile = !showFile}>FILE</button>
       {#if showFile}
@@ -136,6 +141,7 @@
     <button class:on={drawing} on:click={onDraw} title="Draw over the text">DRAW</button>
     <button on:click={onStyles}>STYLE</button>
     <button on:click={onSettings}>SETTINGS</button>
+    {#if !isMac}
     <div class="winctl">
       <button class="wc" on:click={onMinimize} title="Minimize">
         <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -151,6 +157,7 @@
         <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
       </button>
     </div>
+    {/if}
   </div>
 
   <div class="row fmt">
@@ -237,6 +244,8 @@
   .topbar button, .topbar input, .topbar label, .topbar .menu, .topbar .zoom, .topbar .filewrap { -webkit-app-region: no-drag; }
   .row { display: flex; align-items: center; gap: 0.3rem; padding: 0.4rem 0.9rem; }
   .row.main { gap: 0.55rem; }
+  /* Clear the traffic lights (three 12px dots inset 15px, plus breathing room). */
+  .row.main.mac { padding-left: 5.5rem; }
   .row.fmt { flex-wrap: wrap; border-top: 1px solid color-mix(in srgb, var(--rule) 55%, transparent); }
   .spacer { flex: 1; align-self: stretch; min-width: 0.5rem; }
   .searchwrap { flex: 0 1 320px; min-width: 140px; }

@@ -11,8 +11,11 @@
     "preview": "electron-vite preview",
     "web:dev": "vite -c web/vite.config.mjs",
     "web:build": "vite build -c web/vite.config.mjs",
-    "dist": "electron-vite build && electron-builder --linux AppImage",
-    "postdist": "mkdir -p ~/LatteWrite; if [ -f ~/LatteWrite/LatteWrite.AppImage ]; then mv -f ~/LatteWrite/LatteWrite.AppImage ~/LatteWrite/LatteWrite_old.AppImage; fi; cp dist/LatteWrite.AppImage ~/LatteWrite/ && echo \"Deployed LatteWrite.AppImage to ~/LatteWrite\""
+    "dist": "electron-vite build && electron-builder",
+    "postdist": "if [ -f dist/LatteWrite.AppImage ]; then mkdir -p ~/LatteWrite; [ -f ~/LatteWrite/LatteWrite.AppImage ] && mv -f ~/LatteWrite/LatteWrite.AppImage ~/LatteWrite/LatteWrite_old.AppImage; cp dist/LatteWrite.AppImage ~/LatteWrite/ && echo \"Deployed LatteWrite.AppImage to ~/LatteWrite\"; fi",
+    "dist:linux": "electron-vite build && electron-builder --linux AppImage",
+    "dist:mac": "electron-vite build && electron-builder --mac dmg --arm64",
+    "dist:mac:zip": "electron-vite build && electron-builder --mac zip --arm64"
   },
   "dependencies": {
     "@fontsource/architects-daughter": "^5.2.7",
@@ -104,6 +107,33 @@
     "productName": "LatteWrite",
     "directories": {
       "output": "dist"
+    },
+    "afterPack": "scripts/afterPack.cjs",
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64"
+          ]
+        }
+      ],
+      "category": "public.app-category.productivity",
+      "icon": "resources/icon.png",
+      "artifactName": "${productName}-${arch}.${ext}",
+      "identity": null,
+      "extendInfo": {
+        "CFBundleDocumentTypes": [
+          {
+            "CFBundleTypeName": "LatteWrite document",
+            "CFBundleTypeExtensions": [
+              "latte"
+            ],
+            "CFBundleTypeRole": "Editor",
+            "LSHandlerRank": "Owner"
+          }
+        ]
+      }
     },
     "linux": {
       "target": "AppImage",
