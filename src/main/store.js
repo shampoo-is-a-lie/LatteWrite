@@ -1,10 +1,7 @@
 import Store from 'electron-store'
-import path from 'path'
+import { dataPath } from './paths.js'
 
-// When running as AppImage, keep data next to the binary. Fall back to cwd in dev.
-export const dataPath = process.env.APPIMAGE
-  ? path.join(path.dirname(process.env.APPIMAGE), 'LW_DATA')
-  : path.join(process.cwd(), 'LW_DATA')
+export { dataPath }
 
 const store = new Store({
   cwd: dataPath,

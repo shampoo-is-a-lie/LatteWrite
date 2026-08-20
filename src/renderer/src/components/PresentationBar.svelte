@@ -37,10 +37,12 @@
     <button class="pill sm" class:on={revealMode} on:click={onToggleReveal} title="Teleprompter reveal">SCRIPT</button>
   </div>
 
-  <button class="pill" class:on={dictating} disabled={!micAvailable}
-          title={micAvailable ? 'Dictate (Ctrl+D)' : 'Latte Dictate is not installed'} on:click={onDictate}>
-    <span class="mic"></span>{dictating ? (dictLabel || 'LISTENING') : 'DICTATE'}
-  </button>
+  {#if micAvailable}
+    <button class="pill" class:on={dictating} disabled={!micAvailable}
+            title={micAvailable ? 'Dictate (Ctrl+D)' : 'Latte Dictate is not installed'} on:click={onDictate}>
+      <span class="mic"></span>{dictating ? (dictLabel || 'LISTENING') : 'DICTATE'}
+    </button>
+  {/if}
   <button class="pill" on:click={onToggleChrome} title="Hide interface (Ctrl+Shift+H)">
     {chromeHidden ? 'SHOW UI' : 'HIDE UI'}
   </button>

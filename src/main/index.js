@@ -1,5 +1,6 @@
-import { app, shell, BrowserWindow, ipcMain, dialog, session, clipboard, nativeImage } from 'electron'
-import { join, dirname, basename, extname, relative, isAbsolute } from 'path'
+import { app, shell, BrowserWindow, Menu, ipcMain, dialog, session, clipboard, nativeImage } from 'electron'
+const IS_MAC = process.platform === 'darwin'
+import { join, dirname, resolve, basename, extname, relative, isAbsolute } from 'path'
 import { spawn } from 'child_process'
 import fs from 'fs'
 import AdmZip from 'adm-zip'
@@ -13,12 +14,27 @@ import { listRecoverable, restoreFile, listSnapshots } from './recovery.js'
 import { exportHTML, exportMarkdown, exportDocx } from './export.js'
 import { loadFontCss, fontCatalog } from './fonts.js'
 import { available as dictateAvailable, setListening as dictateSet, shutdown as dictateShutdown } from './dictate.js'
+import { docsPath } from './paths.js'
 
 const FILTERS = [{ name: 'LatteWrite', extensions: ['latte'] }]
 
 // A .latte passed on the command line (file association / "open with"). Consumed
 // once by the renderer on startup.
 let initialFile = process.argv.slice(1).find(a => a.endsWith('.latte') && fs.existsSync(a)) || null
+
+// A desktop launcher puts the path in argv; Finder does not — macOS delivers it
+// as an `open-file` event, which can arrive before the window exists.
+app.on('open-file', (event, filePath) => {
+  event.preventDefault()
+  if (!filePath.endsWith('.latte') || !fs.existsSync(filePath)) return
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('open-file', filePath)   // already running: just load it
+    if (mainWindow.isMinimized()) mainWindow.restore()
+    mainWindow.focus()
+  } else {
+    initialFile = filePath                                // launched by the double-click
+  }
+})
 
 let mainWindow = null
 let saveBoundsOnClose = true
@@ -33,7 +49,12 @@ function createWindow() {
     minWidth: 640,
     minHeight: 480,
     backgroundColor: '#17100a',
-    frame: false,
+    // macOS draws its own traffic lights and a window without them reads as
+    // broken, so there the frame is only hidden down to an inset title bar and
+    // the toolbar's first row pads itself clear of them (see TopBar).
+    ...(IS_MAC
+      ? { titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 15, y: 16 } }
+      : { frame: false }),
     show: false,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
@@ -85,12 +106,11 @@ function createWindow() {
   }
 }
 
-// The "latte" folder next to the AppImage (cwd in dev) — where documents live
-// and what the top-bar search looks through.
+// Where documents live and what the top-bar search looks through: beside the
+// AppImage on Linux, under $HOME on macOS. See paths.js for why they differ.
 function docsDir() {
-  const dir = process.env.APPIMAGE ? join(dirname(process.env.APPIMAGE), 'latte') : join(process.cwd(), 'latte')
-  try { fs.mkdirSync(dir, { recursive: true }) } catch {}
-  return dir
+  try { fs.mkdirSync(docsPath, { recursive: true }) } catch {}
+  return docsPath
 }
 
 function sanitizeName(name) {
@@ -165,15 +185,33 @@ ipcMain.handle('doc:saveAs', async (_e, { doc, meta, versions }) => {
 // Persist a document (e.g. a version snapshot) to a fresh, non-colliding file in
 // the latte folder, then open it in a brand-new window (a second instance) — so
 // an old version can be edited on its own without touching the current document.
+// The .app bundle we are running from, or null anywhere else.
+function appBundle() {
+  if (!IS_MAC || !app.isPackaged) return null
+  const bundle = resolve(process.execPath, '..', '..', '..')   // …/X.app/Contents/MacOS/X
+  return bundle.endsWith('.app') ? bundle : null
+}
+
+// A second, fully independent instance. On macOS `open -n` is the only way to
+// ask for another copy of a bundle — spawning the inner executable gets you a
+// process the window server folds back into the first one.
+function launchInstance(file) {
+  const bundle = appBundle()
+  const exe = process.env.APPIMAGE
+  try {
+    if (bundle) spawn('open', ['-n', '-a', bundle, ...(file ? [file] : [])], { detached: true, stdio: 'ignore' }).unref()
+    else if (exe) spawn(exe, file ? [file] : [], { detached: true, stdio: 'ignore' }).unref()
+    else spawn(process.execPath, [...process.argv.slice(1), ...(file ? [file] : [])], { detached: true, stdio: 'ignore' }).unref()
+  } catch { /* nothing to do; the current window keeps working */ }
+}
+
 ipcMain.handle('doc:openInNewWindow', (_e, { doc, meta }) => {
   const base = sanitizeName(meta?.title) || 'Untitled'
   let target = join(docsDir(), `${base}.latte`)
   for (let i = 2; fs.existsSync(target); i++) target = join(docsDir(), `${base} (${i}).latte`)
   saveDocument(target, { doc, meta, versions: [] }, store.get('backupsToKeep'), store.get('backupIntervalMs'))
   addRecent(target)
-  const exe = process.env.APPIMAGE
-  if (exe) spawn(exe, [target], { detached: true, stdio: 'ignore' }).unref()
-  else spawn(process.execPath, [...process.argv.slice(1), target], { detached: true, stdio: 'ignore' }).unref()
+  launchInstance(target)
   return { filePath: target }
 })
 
@@ -471,6 +509,24 @@ ipcMain.handle('backup:restore', async () => {
 // the app shows up in the DE menu (KDE/GNOME/…) and .latte files open with it.
 // AppImages don't self-integrate, so this is opt-in from Settings.
 ipcMain.handle('desktop:install', () => {
+  // macOS takes the same information from the bundle's Info.plist
+  // (CFBundleDocumentTypes), so there is nothing to install — the association
+  // exists as soon as Launch Services has seen the app. It usually has, but a
+  // bundle that was moved or rebuilt in place can go stale, and re-registering
+  // fixes the icon and the "open with" default.
+  if (IS_MAC) {
+    const bundle = appBundle()
+    if (!bundle) return { error: 'Run the packaged LatteWrite.app to register the .latte file type.' }
+    const lsregister = '/System/Library/Frameworks/CoreServices.framework/Frameworks/' +
+      'LaunchServices.framework/Support/lsregister'
+    try {
+      spawn(lsregister, ['-f', bundle], { stdio: 'ignore' }).unref()
+    } catch {
+      return { error: 'Could not reach Launch Services. Opening a .latte with "Open With" once has the same effect.' }
+    }
+    return { ok: true }
+  }
+
   const appimage = process.env.APPIMAGE
   if (!appimage) return { error: 'Run the packaged .AppImage to install the menu shortcut.' }
   const home = app.getPath('home')
@@ -520,12 +576,7 @@ ipcMain.handle('desktop:install', () => {
 
 // Launch a second, fully independent instance (its own editor/undo history) so a
 // different file can be edited alongside this one.
-ipcMain.handle('window:new', () => {
-  const exe = process.env.APPIMAGE
-  if (exe) spawn(exe, [], { detached: true, stdio: 'ignore' }).unref()
-  else spawn(process.execPath, process.argv.slice(1), { detached: true, stdio: 'ignore' }).unref()
-  return true
-})
+ipcMain.handle('window:new', () => { launchInstance(null); return true })
 
 // ── Window controls (frameless) ───────────────────────────────────────────────
 ipcMain.handle('window:minimize', () => mainWindow.minimize())
@@ -540,9 +591,13 @@ ipcMain.handle('app:version', () => app.getVersion())
 // ── Dictation ─────────────────────────────────────────────────────────────────
 // Latte Dictate runs as a child process; events are pushed straight to the
 // renderer, which turns them into grey interim text and committed text.
-ipcMain.handle('dictate:available', () => dictateAvailable())
+// Latte Dictate is a Linux app — it drives real Chrome and types through
+// ydotool, which has no macOS counterpart. It isn't needed there either: macOS
+// dictation (Fn twice) types into the editor like any other text field. The
+// handlers keep their shape so the renderer is identical on both.
+ipcMain.handle('dictate:available', () => (IS_MAC ? false : dictateAvailable()))
 ipcMain.handle('dictate:setListening', (_e, on) =>
-  dictateSet(on, (ev) => mainWindow && !mainWindow.isDestroyed()
+  IS_MAC ? false : dictateSet(on, (ev) => mainWindow && !mainWindow.isDestroyed()
     && mainWindow.webContents.send('dictate:event', ev)))
 
 app.on('before-quit', () => dictateShutdown())
@@ -554,7 +609,55 @@ ipcMain.handle('window:presentation', () => {
   return on
 })
 
+// macOS needs a real menu bar. Without one there is no Cmd+Q, no Cmd+C/V/X/A,
+// no Cmd+Z — a BrowserWindow gets those from menu roles, not for free — and the
+// system's own Dictation and Emoji items, which it injects into a standard Edit
+// menu, never appear. Accelerators the app already binds for itself (Cmd+S/O/N/
+// F/D and the zoom keys, all in App.svelte's onKey) are deliberately left out so
+// nothing is claimed twice. Linux keeps its frameless window and no menu.
+function buildMenu() {
+  if (!IS_MAC) return
+  Menu.setApplicationMenu(Menu.buildFromTemplate([
+    {
+      label: app.name,
+      submenu: [
+        { role: 'about' },
+        { type: 'separator' },
+        { role: 'hide' }, { role: 'hideOthers' }, { role: 'unhide' },
+        { type: 'separator' },
+        { role: 'quit' }
+      ]
+    },
+    {
+      label: 'Edit',
+      submenu: [
+        { role: 'undo' }, { role: 'redo' },
+        { type: 'separator' },
+        { role: 'cut' }, { role: 'copy' }, { role: 'paste' },
+        { role: 'pasteAndMatchStyle' },
+        { role: 'delete' },
+        { role: 'selectAll' },
+        { type: 'separator' },
+        { label: 'Speech', submenu: [{ role: 'startSpeaking' }, { role: 'stopSpeaking' }] }
+      ]
+    },
+    {
+      label: 'View',
+      submenu: [
+        { role: 'togglefullscreen' },
+        { type: 'separator' },
+        { role: 'reload' }, { role: 'toggleDevTools' }
+      ]
+    },
+    {
+      label: 'Window',
+      submenu: [{ role: 'minimize' }, { role: 'zoom' }, { role: 'close' }, { type: 'separator' }, { role: 'front' }]
+    }
+  ]))
+}
+
 app.whenReady().then(() => {
+  buildMenu()
   createWindow()
   maybeStartupSync()   // pull anything the other device changed, once per launch
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow() })

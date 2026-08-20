@@ -235,8 +235,12 @@
   $: editingLabel = draft ? draftBase + ' (unsaved copy)' : style
 
   // Set once at startup: whether the Latte Dictate app was found on disk.
+  // Always false on macOS, where dictation is the system's job (press Fn twice).
   let micAvailable = false
   onDestroy(wireDictation())
+
+  // A .latte double-clicked in Finder while the app is already running.
+  onDestroy(window.api.onOpenFile((filePath) => openByPath(filePath)))
 
   // Window title (what KDE shows in the taskbar) reflects the current document.
   // Electron mirrors the page title to the native window title automatically.
@@ -793,7 +797,7 @@
     else if (ctrl && e.shiftKey && k === 'p') { e.preventDefault(); toggleFullscreen() }
     else if (ctrl && e.shiftKey && k === 'h') { e.preventDefault(); toggleChrome() }
     else if (ctrl && e.shiftKey && k === 'x') { e.preventDefault(); editor?.chain().focus().toggleStrike().run() }
-    else if (ctrl && k === 'd') { e.preventDefault(); toggleDictate() }
+    else if (ctrl && k === 'd') { e.preventDefault(); if (micAvailable) toggleDictate() }
     else if (ctrl && k === 'o') { e.preventDefault(); openDoc() }
     else if (ctrl && k === 'f') { e.preventDefault(); openFind() }
     else if (ctrl && e.shiftKey && k === 'n') { e.preventDefault(); newWindow() }

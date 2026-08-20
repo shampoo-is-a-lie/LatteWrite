@@ -88,6 +88,13 @@ contextBridge.exposeInMainWorld('api', {
       return () => ipcRenderer.off('dictate:event', listener)
     }
   },
+  platform: process.platform,
+  // macOS hands a double-clicked .latte to an already-running app this way.
+  onOpenFile: (cb) => {
+    const listener = (_e, filePath) => cb(filePath)
+    ipcRenderer.on('open-file', listener)
+    return () => ipcRenderer.off('open-file', listener)
+  },
   window: {
     togglePresentation: () => ipcRenderer.invoke('window:presentation'),
     newWindow: () => ipcRenderer.invoke('window:new'),
