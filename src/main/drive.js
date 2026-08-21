@@ -226,10 +226,13 @@ async function pushLocal(drive, rootId, rel, absPath, existingId) {
   return created.data.id
 }
 
-export async function twoWaySync(localRoot, baseline = {}, { trashLocal, drive: injected } = {}) {
+export async function twoWaySync(localRoot, baseline = {}, { trashLocal, drive: injected, onProgress } = {}) {
+  const emit = onProgress || (() => {})
   const drive = injected || await getDriveClient()   // injected client is for tests
   const rootId = await ensureRootFolder(drive)
+  emit({ phase: 'scan', message: 'Scanning Google Drive…' })
   const driveFiles = await walkDriveTree(drive, rootId, '', new Map())
+  emit({ phase: 'scan', message: 'Scanning local files…' })
   const localFiles = await walkLocalTree(localRoot, '', new Map())
   const next = {}
   const stats = { pushed: 0, pulled: 0, deletedLocal: 0, deletedRemote: 0, conflicts: 0, unchanged: 0, errors: 0 }
@@ -244,13 +247,17 @@ export async function twoWaySync(localRoot, baseline = {}, { trashLocal, drive: 
   }
 
   const keys = new Set([...Object.keys(baseline), ...driveFiles.keys(), ...localFiles.keys()])
+  const total = keys.size
+  let i = 0
   for (const rel of keys) {
+    i++
     const L = localFiles.get(rel)
     const D = driveFiles.get(rel)
     const B = baseline[rel]
     try {
       if (L && D) {
         if (L.md5 === D.md5) {                                   // identical on both sides
+          emit({ phase: 'file', index: i, total, file: rel, action: 'unchanged' })
           next[rel] = { driveId: D.id, md5: D.md5 }
           stats.unchanged++
           continue
@@ -258,6 +265,7 @@ export async function twoWaySync(localRoot, baseline = {}, { trashLocal, drive: 
         const localChanged = !B || L.md5 !== B.md5
         const driveChanged = !B || D.md5 !== B.md5
         if (localChanged && driveChanged) {                      // both edited → keep both
+          emit({ phase: 'file', index: i, total, file: rel, action: 'conflict' })
           const cRel = conflictName(rel)
           const cAbs = path.join(localRoot, cRel)
           await downloadTo(drive, D.id, cAbs)                    // their version → conflict copy on disk
@@ -267,29 +275,35 @@ export async function twoWaySync(localRoot, baseline = {}, { trashLocal, drive: 
           next[cRel] = { driveId: theirsId, md5: D.md5 }
           stats.conflicts++
         } else if (localChanged) {                               // only local moved → push
+          emit({ phase: 'file', index: i, total, file: rel, action: 'push' })
           const id = await pushLocal(drive, rootId, rel, L.abs, D.id)
           next[rel] = { driveId: id, md5: L.md5 }
           stats.pushed++
         } else {                                                 // only Drive moved → pull
+          emit({ phase: 'file', index: i, total, file: rel, action: 'pull' })
           await downloadTo(drive, D.id, L.abs)
           next[rel] = { driveId: D.id, md5: D.md5 }
           stats.pulled++
         }
       } else if (L && !D) {
         if (!B || L.md5 !== B.md5) {                             // new locally, or edited-here-but-gone-there → keep it
+          emit({ phase: 'file', index: i, total, file: rel, action: 'push' })
           const id = await pushLocal(drive, rootId, rel, L.abs)
           next[rel] = { driveId: id, md5: L.md5 }
           stats.pushed++
         } else {                                                 // unchanged here, deleted on Drive → delete here
+          emit({ phase: 'file', index: i, total, file: rel, action: 'deleteLocal' })
           if (trashLocal) await trashLocal(L.abs)
           stats.deletedLocal++
         }
       } else if (!L && D) {
         if (!B || D.md5 !== B.md5) {                             // new on Drive, or edited-there-but-gone-here → keep it
+          emit({ phase: 'file', index: i, total, file: rel, action: 'pull' })
           await downloadTo(drive, D.id, path.join(localRoot, rel))
           next[rel] = { driveId: D.id, md5: D.md5 }
           stats.pulled++
         } else {                                                 // unchanged on Drive, deleted here → delete there
+          emit({ phase: 'file', index: i, total, file: rel, action: 'deleteRemote' })
           await trashFile(drive, D.id)
           stats.deletedRemote++
         }
@@ -297,5 +311,6 @@ export async function twoWaySync(localRoot, baseline = {}, { trashLocal, drive: 
       // else: gone from both → drop from the manifest
     } catch { stats.errors++ }
   }
+  emit({ phase: 'done', index: total, total })
   return { stats, manifest: next }
 }

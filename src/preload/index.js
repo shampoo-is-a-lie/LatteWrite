@@ -37,6 +37,11 @@ contextBridge.exposeInMainWorld('api', {
   sync: {
     now: (filePath) => ipcRenderer.invoke('sync:now', filePath),
     all: () => ipcRenderer.invoke('sync:all'),
+    onProgress: (cb) => {
+      const listener = (_e, ev) => cb(ev)
+      ipcRenderer.on('sync:progress', listener)
+      return () => ipcRenderer.off('sync:progress', listener)
+    },
     onUpdated: (cb) => {
       const listener = () => cb()
       ipcRenderer.on('sync:updated', listener)

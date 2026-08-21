@@ -136,9 +136,22 @@
 
   let syncAllMsg = ''
   let syncingAll = false
+  let syncProgress = null // { phase: 'scan'|'file'|'done', index, total, file, action, message }
+  const SYNC_VERBS = {
+    push: 'Uploading', pull: 'Downloading', conflict: 'Resolving conflict on',
+    deleteLocal: 'Removing locally', deleteRemote: 'Removing on Drive', unchanged: 'Checking'
+  }
+  $: syncPct = syncProgress?.phase === 'file' && syncProgress.total
+    ? Math.round((syncProgress.index / syncProgress.total) * 100) : 0
+  $: syncDesc = !syncProgress ? 'Starting…'
+    : syncProgress.phase === 'scan' ? syncProgress.message
+    : syncProgress.phase === 'file' ? `${SYNC_VERBS[syncProgress.action] || 'Syncing'} ${syncProgress.file} (${syncProgress.index}/${syncProgress.total})`
+    : 'Finishing…'
   async function syncAll() {
     syncingAll = true
-    syncAllMsg = 'Syncing…'
+    syncAllMsg = ''
+    syncProgress = null
+    const off = window.api.sync.onProgress((ev) => { syncProgress = ev })
     try {
       const r = await window.api.sync.all()
       if (r?.ok) {
@@ -155,6 +168,8 @@
     } catch (e) {
       syncAllMsg = e?.message || 'Sync failed'
     }
+    off()
+    syncProgress = null
     syncingAll = false
   }
 
@@ -354,7 +369,14 @@
       <div class="row">
         <button class="solid" on:click={syncAll} disabled={syncingAll}>{syncingAll ? 'SYNCING…' : 'SYNC ALL FILES'}</button>
       </div>
-      {#if syncAllMsg}<p class="note">{syncAllMsg}</p>{/if}
+      {#if syncingAll}
+        <div class="meter sync-meter">
+          <div class="meter-fill" class:indeterminate={syncProgress?.phase !== 'file'} style="width:{syncProgress?.phase === 'file' ? syncPct : 100}%"></div>
+        </div>
+        <p class="note sync-desc">{syncDesc}</p>
+      {:else if syncAllMsg}
+        <p class="note">{syncAllMsg}</p>
+      {/if}
     {/if}
   </section>
 
@@ -472,7 +494,14 @@
     border-radius: 5px; padding: 0.15rem 0.4rem; min-width: 1.1rem; text-align: center;
   }
   .meter { flex: 1; height: 10px; background: var(--bg); border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; }
-  .meter-fill { height: 100%; background: var(--accent); transition: width 0.06s linear; }
+  .meter-fill { height: 100%; background: var(--accent); transition: width 0.15s ease-out; }
+  .sync-meter { margin-top: 0.7rem; width: 100%; }
+  .meter-fill.indeterminate {
+    width: 40% !important; animation: sync-slide 1.1s ease-in-out infinite;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  }
+  @keyframes sync-slide { 0% { margin-left: -40%; } 100% { margin-left: 100%; } }
+  .sync-desc { margin-top: 0.4rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .creds { margin-top: 0.5rem; }
   .row { display: flex; align-items: center; gap: 0.9rem; margin-top: 0.5rem; }
   .ok { color: var(--accent); font-size: 0.8rem; letter-spacing: 0.1em; }

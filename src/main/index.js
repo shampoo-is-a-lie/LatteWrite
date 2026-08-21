@@ -376,9 +376,10 @@ async function trashLocal(abs) {
 }
 
 // Run the full two-way reconcile against Drive, persisting the new baseline.
-// Returns the stats summary.
-async function runTwoWaySync() {
-  const { stats, manifest } = await gdriveTwoWay(docsDir(), readSyncState(), { trashLocal })
+// Returns the stats summary. onProgress, if given, is called repeatedly with
+// { phase, index, total, file, action } as the reconcile walks the tree.
+async function runTwoWaySync(onProgress) {
+  const { stats, manifest } = await gdriveTwoWay(docsDir(), readSyncState(), { trashLocal, onProgress })
   writeSyncState(manifest)
   return stats
 }
@@ -388,12 +389,16 @@ function broadcast(channel, payload) {
 }
 
 // The SYNC ALL button: a manual full two-way reconcile (Google Drive only).
-ipcMain.handle('sync:all', async () => {
+// Streams progress back to the requesting window over 'sync:progress' so the
+// Settings panel can show a bar + description instead of a single opaque wait.
+ipcMain.handle('sync:all', async (event) => {
   const provider = store.get('syncProvider')
   if (provider === 'none') return { ok: false, error: 'No sync provider selected' }
   if (provider !== 'gdrive') return { ok: false, error: 'Two-way sync is only available for Google Drive' }
+  const sender = event.sender
+  const onProgress = (ev) => { if (!sender.isDestroyed()) sender.send('sync:progress', ev) }
   try {
-    const stats = await runTwoWaySync()
+    const stats = await runTwoWaySync(onProgress)
     broadcast('sync:updated')   // let open windows reload anything that changed on disk
     return { ok: true, ...stats }
   } catch (e) { return { ok: false, error: e.message } }
